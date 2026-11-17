@@ -1,0 +1,32 @@
+{
+ "_help": "Sectors shown on the heatmap. 'yahoo' = live index ticker (value and % come from the real index). 'csv' = NSE constituent file (which stocks belong to it). 'industry' / 'symbols' = custom sector built from Nifty 200 stocks (its % is the average of those stocks).",
+ "csv_hosts": ["https://archives.nseindia.com/content/indices/", "https://www.niftyindices.com/IndexConstituent/"],
+ "sectors": [
+  {"name": "NIFTY PSU BANK", "yahoo": "^CNXPSUBANK", "csv": "ind_niftypsubanklist.csv"},
+  {"name": "NIFTY PVT BANK", "yahoo": "NIFTY_PVT_BANK.NS", "csv": "ind_nifty_privatebanklist.csv"},
+  {"name": "NIFTY FIN SERV", "yahoo": "NIFTY_FIN_SERVICE.NS", "csv": "ind_niftyfinancelist.csv"},
+  {"name": "NIFTY CAPITAL MKT", "yahoo": "NIFTY_CAPITAL_MKT.NS", "csv": "ind_niftycapitalmarkets_list.csv"},
+  {"name": "NIFTY IT", "yahoo": "^CNXIT", "csv": "ind_niftyitlist.csv"},
+  {"name": "NIFTY AUTO", "yahoo": "^CNXAUTO", "csv": "ind_niftyautolist.csv"},
+  {"name": "NIFTY PHARMA", "yahoo": "^CNXPHARMA", "csv": "ind_niftypharmalist.csv"},
+  {"name": "NIFTY HEALTHCARE", "yahoo": "NIFTY_HEALTHCARE.NS", "csv": "ind_niftyhealthcarelist.csv"},
+  {"name": "NIFTY FMCG", "yahoo": "^CNXFMCG", "csv": "ind_niftyfmcglist.csv"},
+  {"name": "NIFTY CONSUMER DUR", "yahoo": "NIFTY_CONSR_DURBL.NS", "csv": "ind_niftyconsumerdurableslist.csv"},
+  {"name": "NIFTY CONSUMPTION", "yahoo": "^CNXCONSUM", "csv": "ind_niftyconsumptionlist.csv"},
+  {"name": "NIFTY METAL", "yahoo": "^CNXMETAL", "csv": "ind_niftymetallist.csv"},
+  {"name": "NIFTY OIL & GAS", "yahoo": "NIFTY_OIL_AND_GAS.NS", "csv": "ind_niftyoilgaslist.csv"},
+  {"name": "NIFTY ENERGY", "yahoo": "^CNXENERGY", "csv": "ind_niftyenergylist.csv"},
+  {"name": "NIFTY REALTY", "yahoo": "^CNXREALTY", "csv": "ind_niftyrealtylist.csv"},
+  {"name": "NIFTY INFRA", "yahoo": "^CNXINFRA", "csv": "ind_niftyinfralist.csv"},
+  {"name": "NIFTY CEMENT", "yahoo": "NIFTY_CEMENT.NS", "csv": "ind_niftycement_list.csv"},
+  {"name": "NIFTY DEFENCE", "yahoo": "NIFTY_IND_DEFENCE.NS", "csv": "ind_niftyindiadefence_list.csv"},
+  {"name": "NIFTY CHEMICALS", "yahoo": "NIFTY_CHEMICALS.NS", "csv": "ind_niftychemicals_list.csv"},
+  {"name": "NIFTY MEDIA", "yahoo": "^CNXMEDIA", "csv": "ind_niftymedialist.csv"},
+  {"name": "NIFTY MNC", "yahoo": "^CNXMNC", "csv": "ind_niftymnclist.csv"},
+  {"name": "CAPITAL GOODS", "industry": ["Capital Goods"]},
+  {"name": "POWER", "industry": ["Power"]},
+  {"name": "TELECOM", "industry": ["Telecommunication"]},
+  {"name": "CONSUMER SERVICES", "industry": ["Consumer Services"]},
+  {"name": "INSURANCE", "symbols": ["HDFCLIFE", "SBILIFE", "ICICIGI", "LICI", "ICICIPRULI", "MFSL", "POLICYBZR", "GICRE", "NIACL"]}
+ ]
+}

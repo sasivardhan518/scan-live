@@ -1,0 +1,776 @@
+[
+ {
+  "symbol": "HDFCBANK",
+  "sector": "Banks",
+  "weight": 10,
+  "base": 1000
+ },
+ {
+  "symbol": "ICICIBANK",
+  "sector": "Banks",
+  "weight": 9,
+  "base": 1400
+ },
+ {
+  "symbol": "SBIN",
+  "sector": "Banks",
+  "weight": 8,
+  "base": 950
+ },
+ {
+  "symbol": "KOTAKBANK",
+  "sector": "Banks",
+  "weight": 5,
+  "base": 2100
+ },
+ {
+  "symbol": "AXISBANK",
+  "sector": "Banks",
+  "weight": 5,
+  "base": 1200
+ },
+ {
+  "symbol": "INDUSINDBK",
+  "sector": "Banks",
+  "weight": 2,
+  "base": 800
+ },
+ {
+  "symbol": "BANKBARODA",
+  "sector": "Banks",
+  "weight": 2,
+  "base": 250
+ },
+ {
+  "symbol": "PNB",
+  "sector": "Banks",
+  "weight": 2,
+  "base": 110
+ },
+ {
+  "symbol": "CANBK",
+  "sector": "Banks",
+  "weight": 2,
+  "base": 120
+ },
+ {
+  "symbol": "FEDERALBNK",
+  "sector": "Banks",
+  "weight": 1,
+  "base": 210
+ },
+ {
+  "symbol": "IDFCFIRSTB",
+  "sector": "Banks",
+  "weight": 1,
+  "base": 70
+ },
+ {
+  "symbol": "AUBANK",
+  "sector": "Banks",
+  "weight": 1,
+  "base": 750
+ },
+ {
+  "symbol": "TCS",
+  "sector": "IT",
+  "weight": 9,
+  "base": 3300
+ },
+ {
+  "symbol": "INFY",
+  "sector": "IT",
+  "weight": 8,
+  "base": 1650
+ },
+ {
+  "symbol": "HCLTECH",
+  "sector": "IT",
+  "weight": 5,
+  "base": 1650
+ },
+ {
+  "symbol": "WIPRO",
+  "sector": "IT",
+  "weight": 3,
+  "base": 260
+ },
+ {
+  "symbol": "TECHM",
+  "sector": "IT",
+  "weight": 2,
+  "base": 1500
+ },
+ {
+  "symbol": "LTM",
+  "sector": "IT",
+  "weight": 2,
+  "base": 5800
+ },
+ {
+  "symbol": "PERSISTENT",
+  "sector": "IT",
+  "weight": 1,
+  "base": 5900
+ },
+ {
+  "symbol": "COFORGE",
+  "sector": "IT",
+  "weight": 1,
+  "base": 1800
+ },
+ {
+  "symbol": "MPHASIS",
+  "sector": "IT",
+  "weight": 1,
+  "base": 2800
+ },
+ {
+  "symbol": "OFSS",
+  "sector": "IT",
+  "weight": 1,
+  "base": 9000
+ },
+ {
+  "symbol": "MARUTI",
+  "sector": "Auto",
+  "weight": 5,
+  "base": 12500
+ },
+ {
+  "symbol": "M&M",
+  "sector": "Auto",
+  "weight": 6,
+  "base": 3300
+ },
+ {
+  "symbol": "BAJAJ-AUTO",
+  "sector": "Auto",
+  "weight": 3,
+  "base": 9000
+ },
+ {
+  "symbol": "EICHERMOT",
+  "sector": "Auto",
+  "weight": 2,
+  "base": 6800
+ },
+ {
+  "symbol": "HEROMOTOCO",
+  "sector": "Auto",
+  "weight": 2,
+  "base": 5500
+ },
+ {
+  "symbol": "TVSMOTOR",
+  "sector": "Auto",
+  "weight": 2,
+  "base": 3000
+ },
+ {
+  "symbol": "ASHOKLEY",
+  "sector": "Auto",
+  "weight": 1,
+  "base": 140
+ },
+ {
+  "symbol": "BOSCHLTD",
+  "sector": "Auto",
+  "weight": 1,
+  "base": 38000
+ },
+ {
+  "symbol": "MOTHERSON",
+  "sector": "Auto",
+  "weight": 1,
+  "base": 100
+ },
+ {
+  "symbol": "BHARATFORG",
+  "sector": "Auto",
+  "weight": 1,
+  "base": 1300
+ },
+ {
+  "symbol": "SUNPHARMA",
+  "sector": "Pharma & Health",
+  "weight": 5,
+  "base": 1700
+ },
+ {
+  "symbol": "CIPLA",
+  "sector": "Pharma & Health",
+  "weight": 3,
+  "base": 1500
+ },
+ {
+  "symbol": "DRREDDY",
+  "sector": "Pharma & Health",
+  "weight": 2,
+  "base": 1250
+ },
+ {
+  "symbol": "DIVISLAB",
+  "sector": "Pharma & Health",
+  "weight": 2,
+  "base": 6000
+ },
+ {
+  "symbol": "LUPIN",
+  "sector": "Pharma & Health",
+  "weight": 1,
+  "base": 2000
+ },
+ {
+  "symbol": "AUROPHARMA",
+  "sector": "Pharma & Health",
+  "weight": 1,
+  "base": 1200
+ },
+ {
+  "symbol": "TORNTPHARM",
+  "sector": "Pharma & Health",
+  "weight": 1,
+  "base": 3600
+ },
+ {
+  "symbol": "ZYDUSLIFE",
+  "sector": "Pharma & Health",
+  "weight": 1,
+  "base": 950
+ },
+ {
+  "symbol": "MANKIND",
+  "sector": "Pharma & Health",
+  "weight": 1,
+  "base": 2500
+ },
+ {
+  "symbol": "ALKEM",
+  "sector": "Pharma & Health",
+  "weight": 1,
+  "base": 5400
+ },
+ {
+  "symbol": "APOLLOHOSP",
+  "sector": "Pharma & Health",
+  "weight": 2,
+  "base": 7500
+ },
+ {
+  "symbol": "MAXHEALTH",
+  "sector": "Pharma & Health",
+  "weight": 1,
+  "base": 1150
+ },
+ {
+  "symbol": "HINDUNILVR",
+  "sector": "FMCG",
+  "weight": 6,
+  "base": 2400
+ },
+ {
+  "symbol": "ITC",
+  "sector": "FMCG",
+  "weight": 7,
+  "base": 410
+ },
+ {
+  "symbol": "NESTLEIND",
+  "sector": "FMCG",
+  "weight": 2,
+  "base": 1250
+ },
+ {
+  "symbol": "BRITANNIA",
+  "sector": "FMCG",
+  "weight": 2,
+  "base": 5800
+ },
+ {
+  "symbol": "TATACONSUM",
+  "sector": "FMCG",
+  "weight": 1,
+  "base": 1100
+ },
+ {
+  "symbol": "DABUR",
+  "sector": "FMCG",
+  "weight": 1,
+  "base": 520
+ },
+ {
+  "symbol": "GODREJCP",
+  "sector": "FMCG",
+  "weight": 1,
+  "base": 1200
+ },
+ {
+  "symbol": "MARICO",
+  "sector": "FMCG",
+  "weight": 1,
+  "base": 720
+ },
+ {
+  "symbol": "COLPAL",
+  "sector": "FMCG",
+  "weight": 1,
+  "base": 2300
+ },
+ {
+  "symbol": "VBL",
+  "sector": "FMCG",
+  "weight": 1,
+  "base": 500
+ },
+ {
+  "symbol": "TATASTEEL",
+  "sector": "Metals",
+  "weight": 3,
+  "base": 170
+ },
+ {
+  "symbol": "JSWSTEEL",
+  "sector": "Metals",
+  "weight": 3,
+  "base": 1050
+ },
+ {
+  "symbol": "HINDALCO",
+  "sector": "Metals",
+  "weight": 3,
+  "base": 780
+ },
+ {
+  "symbol": "VEDL",
+  "sector": "Metals",
+  "weight": 2,
+  "base": 500
+ },
+ {
+  "symbol": "JINDALSTEL",
+  "sector": "Metals",
+  "weight": 1,
+  "base": 1000
+ },
+ {
+  "symbol": "NMDC",
+  "sector": "Metals",
+  "weight": 1,
+  "base": 75
+ },
+ {
+  "symbol": "SAIL",
+  "sector": "Metals",
+  "weight": 1,
+  "base": 130
+ },
+ {
+  "symbol": "NATIONALUM",
+  "sector": "Metals",
+  "weight": 1,
+  "base": 250
+ },
+ {
+  "symbol": "HINDZINC",
+  "sector": "Metals",
+  "weight": 1,
+  "base": 480
+ },
+ {
+  "symbol": "APLAPOLLO",
+  "sector": "Metals",
+  "weight": 1,
+  "base": 1700
+ },
+ {
+  "symbol": "RELIANCE",
+  "sector": "Oil, Gas, Coal",
+  "weight": 12,
+  "base": 1500
+ },
+ {
+  "symbol": "ONGC",
+  "sector": "Oil, Gas, Coal",
+  "weight": 2,
+  "base": 240
+ },
+ {
+  "symbol": "IOC",
+  "sector": "Oil, Gas, Coal",
+  "weight": 2,
+  "base": 160
+ },
+ {
+  "symbol": "BPCL",
+  "sector": "Oil, Gas, Coal",
+  "weight": 1,
+  "base": 330
+ },
+ {
+  "symbol": "GAIL",
+  "sector": "Oil, Gas, Coal",
+  "weight": 1,
+  "base": 180
+ },
+ {
+  "symbol": "COALINDIA",
+  "sector": "Oil, Gas, Coal",
+  "weight": 2,
+  "base": 390
+ },
+ {
+  "symbol": "PETRONET",
+  "sector": "Oil, Gas, Coal",
+  "weight": 1,
+  "base": 280
+ },
+ {
+  "symbol": "HINDPETRO",
+  "sector": "Oil, Gas, Coal",
+  "weight": 1,
+  "base": 430
+ },
+ {
+  "symbol": "OIL",
+  "sector": "Oil, Gas, Coal",
+  "weight": 1,
+  "base": 420
+ },
+ {
+  "symbol": "NTPC",
+  "sector": "Power",
+  "weight": 3,
+  "base": 340
+ },
+ {
+  "symbol": "POWERGRID",
+  "sector": "Power",
+  "weight": 3,
+  "base": 280
+ },
+ {
+  "symbol": "TATAPOWER",
+  "sector": "Power",
+  "weight": 1,
+  "base": 390
+ },
+ {
+  "symbol": "ADANIGREEN",
+  "sector": "Power",
+  "weight": 1,
+  "base": 1000
+ },
+ {
+  "symbol": "ADANIPOWER",
+  "sector": "Power",
+  "weight": 1,
+  "base": 150
+ },
+ {
+  "symbol": "JSWENERGY",
+  "sector": "Power",
+  "weight": 1,
+  "base": 520
+ },
+ {
+  "symbol": "NHPC",
+  "sector": "Power",
+  "weight": 1,
+  "base": 85
+ },
+ {
+  "symbol": "TORNTPOWER",
+  "sector": "Power",
+  "weight": 1,
+  "base": 1300
+ },
+ {
+  "symbol": "BAJFINANCE",
+  "sector": "Fin Services",
+  "weight": 5,
+  "base": 1000
+ },
+ {
+  "symbol": "BAJAJFINSV",
+  "sector": "Fin Services",
+  "weight": 3,
+  "base": 2000
+ },
+ {
+  "symbol": "HDFCLIFE",
+  "sector": "Fin Services",
+  "weight": 2,
+  "base": 750
+ },
+ {
+  "symbol": "SBILIFE",
+  "sector": "Fin Services",
+  "weight": 2,
+  "base": 1900
+ },
+ {
+  "symbol": "SHRIRAMFIN",
+  "sector": "Fin Services",
+  "weight": 2,
+  "base": 650
+ },
+ {
+  "symbol": "CHOLAFIN",
+  "sector": "Fin Services",
+  "weight": 1,
+  "base": 1650
+ },
+ {
+  "symbol": "MUTHOOTFIN",
+  "sector": "Fin Services",
+  "weight": 1,
+  "base": 3000
+ },
+ {
+  "symbol": "PFC",
+  "sector": "Fin Services",
+  "weight": 1,
+  "base": 400
+ },
+ {
+  "symbol": "RECLTD",
+  "sector": "Fin Services",
+  "weight": 1,
+  "base": 380
+ },
+ {
+  "symbol": "LICI",
+  "sector": "Fin Services",
+  "weight": 2,
+  "base": 900
+ },
+ {
+  "symbol": "JIOFIN",
+  "sector": "Fin Services",
+  "weight": 2,
+  "base": 300
+ },
+ {
+  "symbol": "SBICARD",
+  "sector": "Fin Services",
+  "weight": 1,
+  "base": 900
+ },
+ {
+  "symbol": "LT",
+  "sector": "Capital Goods",
+  "weight": 6,
+  "base": 3900
+ },
+ {
+  "symbol": "SIEMENS",
+  "sector": "Capital Goods",
+  "weight": 1,
+  "base": 3200
+ },
+ {
+  "symbol": "ABB",
+  "sector": "Capital Goods",
+  "weight": 1,
+  "base": 5300
+ },
+ {
+  "symbol": "BEL",
+  "sector": "Capital Goods",
+  "weight": 2,
+  "base": 400
+ },
+ {
+  "symbol": "HAL",
+  "sector": "Capital Goods",
+  "weight": 2,
+  "base": 4400
+ },
+ {
+  "symbol": "CGPOWER",
+  "sector": "Capital Goods",
+  "weight": 1,
+  "base": 650
+ },
+ {
+  "symbol": "POLYCAB",
+  "sector": "Capital Goods",
+  "weight": 1,
+  "base": 7500
+ },
+ {
+  "symbol": "CUMMINSIND",
+  "sector": "Capital Goods",
+  "weight": 1,
+  "base": 4200
+ },
+ {
+  "symbol": "HAVELLS",
+  "sector": "Capital Goods",
+  "weight": 1,
+  "base": 1500
+ },
+ {
+  "symbol": "BHEL",
+  "sector": "Capital Goods",
+  "weight": 1,
+  "base": 260
+ },
+ {
+  "symbol": "ULTRACEMCO",
+  "sector": "Cement",
+  "weight": 3,
+  "base": 12000
+ },
+ {
+  "symbol": "GRASIM",
+  "sector": "Cement",
+  "weight": 2,
+  "base": 2700
+ },
+ {
+  "symbol": "SHREECEM",
+  "sector": "Cement",
+  "weight": 1,
+  "base": 25000
+ },
+ {
+  "symbol": "AMBUJACEM",
+  "sector": "Cement",
+  "weight": 1,
+  "base": 550
+ },
+ {
+  "symbol": "ACC",
+  "sector": "Cement",
+  "weight": 1,
+  "base": 1900
+ },
+ {
+  "symbol": "DALBHARAT",
+  "sector": "Cement",
+  "weight": 1,
+  "base": 2100
+ },
+ {
+  "symbol": "DLF",
+  "sector": "Realty",
+  "weight": 2,
+  "base": 750
+ },
+ {
+  "symbol": "GODREJPROP",
+  "sector": "Realty",
+  "weight": 1,
+  "base": 2200
+ },
+ {
+  "symbol": "LODHA",
+  "sector": "Realty",
+  "weight": 1,
+  "base": 1200
+ },
+ {
+  "symbol": "OBEROIRLTY",
+  "sector": "Realty",
+  "weight": 1,
+  "base": 1700
+ },
+ {
+  "symbol": "PRESTIGE",
+  "sector": "Realty",
+  "weight": 1,
+  "base": 1600
+ },
+ {
+  "symbol": "PHOENIXLTD",
+  "sector": "Realty",
+  "weight": 1,
+  "base": 1700
+ },
+ {
+  "symbol": "TITAN",
+  "sector": "Consumer",
+  "weight": 3,
+  "base": 3600
+ },
+ {
+  "symbol": "TRENT",
+  "sector": "Consumer",
+  "weight": 2,
+  "base": 4500
+ },
+ {
+  "symbol": "DMART",
+  "sector": "Consumer",
+  "weight": 2,
+  "base": 4000
+ },
+ {
+  "symbol": "ETERNAL",
+  "sector": "Consumer",
+  "weight": 3,
+  "base": 300
+ },
+ {
+  "symbol": "NYKAA",
+  "sector": "Consumer",
+  "weight": 1,
+  "base": 220
+ },
+ {
+  "symbol": "JUBLFOOD",
+  "sector": "Consumer",
+  "weight": 1,
+  "base": 600
+ },
+ {
+  "symbol": "ASIANPAINT",
+  "sector": "Consumer",
+  "weight": 3,
+  "base": 2400
+ },
+ {
+  "symbol": "PIDILITIND",
+  "sector": "Consumer",
+  "weight": 1,
+  "base": 3000
+ },
+ {
+  "symbol": "BERGEPAINT",
+  "sector": "Consumer",
+  "weight": 1,
+  "base": 500
+ },
+ {
+  "symbol": "DIXON",
+  "sector": "Consumer",
+  "weight": 1,
+  "base": 15000
+ },
+ {
+  "symbol": "VOLTAS",
+  "sector": "Consumer",
+  "weight": 1,
+  "base": 1400
+ },
+ {
+  "symbol": "BHARTIARTL",
+  "sector": "Telecom",
+  "weight": 9,
+  "base": 2000
+ },
+ {
+  "symbol": "IDEA",
+  "sector": "Telecom",
+  "weight": 1,
+  "base": 8
+ },
+ {
+  "symbol": "INDUSTOWER",
+  "sector": "Telecom",
+  "weight": 1,
+  "base": 380
+ }
+]
