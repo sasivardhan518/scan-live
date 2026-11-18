@@ -21,6 +21,8 @@ Open `http://<your-computer-ip>:8787/` on the same Wi-Fi. There is no password, 
 - `GET /snapshot`            current quotes for all stocks
 - `GET /snapshot?at=09:20`   quotes as of that time today (the app uses this to lock the 9:20 shortlist, even if you open it later)
 - `GET /candles?symbol=X&tf=5m|1d`
+- `GET /sessions`            trading days the app can show (latest first) and the default day
+- Add `&date=YYYY-MM-DD` to `/snapshot` and `/candles` for a past session. Past days use 5-minute candles (Yahoo keeps about 60 days); the latest session uses 1-minute candles.
 - `GET /health`              provider status, symbols loaded, last error
 
 ## Notes

@@ -267,6 +267,13 @@ class YahooProvider:
     def daily(self, symbols):
         return parse_yf_frame(self._download(symbols, period="6mo", interval="1d"), symbols)
 
+    def day_candles(self, symbols, day, suffix=".NS"):
+        """5-minute candles for one past session (Yahoo keeps 5-minute data for about 60 days). Returns ({symbol: rows}, step minutes)."""
+        df = self.yf.download([x + suffix for x in symbols], start=day.isoformat(), end=(day + dt.timedelta(days=1)).isoformat(),
+                              interval="5m", group_by="ticker", threads=True, progress=False, auto_adjust=False)
+        raw = parse_yf_frame(df, symbols, suffix)
+        return {k: [c for c in v if c["ts"].date() == day] for k, v in raw.items()}, 5
+
     def intraday(self, symbols, upto=None):
         raw = parse_yf_frame(self._download(symbols, period="5d", interval="1m"), symbols)
         if not raw:
@@ -315,6 +322,11 @@ class KiteProvider:
         to = (upto or now).replace(tzinfo=None)
         return {s: self._hist(s, frm, to, "minute") for s in symbols if s in self.tok}
 
+    def day_candles(self, symbols, day, suffix=None):
+        """1-minute candles for one past session (about 70 s for 200 stocks at Kite's rate limit)."""
+        frm = dt.datetime.combine(day, dt.time(9, 15)); to = dt.datetime.combine(day, dt.time(15, 30))
+        return {s: self._hist(s, frm, to, "minute") for s in symbols if s in self.tok}, 1
+
     def quotes(self, symbols):
         out = {}
         for i in range(0, len(symbols), 400):
@@ -347,6 +359,7 @@ class Store:
         self.daily_at = self.intra_at = 0.0
         self.intra_now = None
         self.err, self.lock = None, threading.Lock()
+        self.days, self.day_lock = {}, threading.Lock()            # past sessions: {date: {"stocks", "idx", "step"}}
 
     def refresh(self, force=False):
         try:
@@ -377,30 +390,33 @@ class Store:
                     self.idx.update(got)
             self.idx_err = None if got else "no index data"
             if time.time() - getattr(self, "idx_daily_at", 0) > 600:     # official closes, for the previous-close base
-                dd = parse_yf_frame(yf.download(self.index_tickers, period="1mo", interval="1d", group_by="ticker", threads=True,
+                dd = parse_yf_frame(yf.download(self.index_tickers, period="4mo", interval="1d", group_by="ticker", threads=True,
                                                 progress=False, auto_adjust=False), self.index_tickers, suffix="")
                 if dd:
                     self.idx_daily, self.idx_daily_at = {t: {c["ts"].date(): c["c"] for c in rows} for t, rows in dd.items()}, time.time()
         except Exception as e:
             self.idx_err = repr(e)
 
-    def sectors_payload(self, sess, cutoff=None):
+    def sectors_payload(self, sess, cutoff=None, idx=None, step=ONE_MIN):
         """[{name, members, constituents, custom, value, prevClose, chg}] - chg is null for custom sectors (the app averages their stocks)."""
         out = []
+        idx = self.idx if idx is None else idx
         for sec in self.sectors:
             d = {"name": sec["name"], "members": sec["members"], "constituents": sec["constituents"], "custom": not sec.get("yahoo"),
                  "value": None, "prevClose": None, "chg": None}
-            rows = self.idx.get(sec.get("yahoo")) or []
-            today = [c for c in rows if c["ts"].date() == sess and (cutoff is None or c["ts"] + ONE_MIN <= cutoff)]
+            rows = idx.get(sec.get("yahoo")) or []
+            today = [c for c in rows if c["ts"].date() == sess and (cutoff is None or c["ts"] + step <= cutoff)]
             prev = [c for c in rows if c["ts"].date() < sess]
-            if today and prev:
-                closes = getattr(self, "idx_daily", {}).get(sec.get("yahoo"), {})
-                prev_day = prev[-1]["ts"].date()
+            closes = getattr(self, "idx_daily", {}).get(sec.get("yahoo"), {})
+            earlier = [k for k in closes if k < sess]
+            if today and (prev or earlier):
                 # official closing value when Yahoo has it for that exact day (index closes are not the last 1-minute print)
-                d["prevClose"] = closes.get(prev_day, prev[-1]["c"])
-                after_close = cutoff is None and today[-1]["ts"].time() >= dt.time(15, 29)
+                prev_day = prev[-1]["ts"].date() if prev else max(earlier)
+                d["prevClose"] = closes.get(prev_day, prev[-1]["c"] if prev else None)
+                after_close = cutoff is None and (today[-1]["ts"] + step).time() >= dt.time(15, 30)
                 d["value"] = closes.get(sess, today[-1]["c"]) if after_close else today[-1]["c"]
-                d["chg"] = round((d["value"] / d["prevClose"] - 1) * 100, 3)
+                if d["prevClose"]:
+                    d["chg"] = round((d["value"] / d["prevClose"] - 1) * 100, 3)
             out.append(d)
         return out
 
@@ -419,10 +435,10 @@ class Store:
                 "sectors": self.sec_of.get(sym, [])}
 
     @staticmethod
-    def _first5(rows):
-        """The 09:15-09:20 candle from 1-minute rows, or None until all five minutes are complete."""
+    def _first5(rows, step_min=1):
+        """The 09:15-09:20 candle from 1- or 5-minute rows, or None until all five minutes are complete."""
         f = [c for c in rows if c["ts"].time() < dt.time(9, 20)]
-        if len(f) < 5:
+        if len(f) * step_min < 5:
             return None
         return {"o": f[0]["o"], "h": max(c["h"] for c in f), "l": min(c["l"] for c in f), "c": f[-1]["c"]}
 
@@ -436,7 +452,67 @@ class Store:
             self.at_cache[key] = self.prov.intraday(self.syms, upto=cutoff)
         return {s: self._first5(rows) for s, rows in self.at_cache[key].items()}
 
-    def snapshot(self, at=None):
+    def latest_session(self):
+        return self.prov.now().date() if hasattr(self.prov, "quotes") else self.session_date()
+
+    def sessions(self):
+        """Trading days the app can show: the latest session plus past days with intraday data (about 60 days back)."""
+        latest = self.latest_session()
+        days = {c["ts"].date() for rows in self.daily.values() for c in rows[-70:]}
+        days.add(latest)
+        floor = self.prov.now().date() - dt.timedelta(days=59)
+        out = sorted((d for d in days if floor <= d <= latest), reverse=True)
+        return {"default": latest.isoformat(), "dates": [d.isoformat() for d in out]}
+
+    def day_data(self, day):
+        """Candles for one past session, fetched once and cached (the five most recent requests are kept)."""
+        with self.day_lock:
+            if day in self.days:
+                return self.days[day]
+            if not hasattr(self.prov, "day_candles"):
+                raise LookupError("this data source has no past sessions")
+            stocks, step = self.prov.day_candles(self.syms, day)
+            idx = {}
+            if self.index_tickers:
+                try:
+                    import yfinance as yf
+                    # a few days back as well, so indices without daily history still get a previous close
+                    df = yf.download(self.index_tickers, start=(day - dt.timedelta(days=7)).isoformat(), end=(day + dt.timedelta(days=1)).isoformat(),
+                                     interval="5m", group_by="ticker", threads=True, progress=False, auto_adjust=False)
+                    idx = {k: [c for c in v if c["ts"].date() <= day] for k, v in parse_yf_frame(df, self.index_tickers, suffix="").items()}
+                except Exception:
+                    idx = {}
+            if not any(stocks.values()):
+                raise LookupError(f"no market data for {day.isoformat()} (weekend, holiday, or older than about 60 days)")
+            data = {"stocks": stocks, "idx": idx, "step": max(step, 5) if idx else step, "stock_step": step}
+            self.days[day] = data
+            for old in sorted(self.days)[:-5]:
+                self.days.pop(old, None)
+            return data
+
+    def _snapshot_day(self, day, at):
+        dd = self.day_data(day)
+        step = dt.timedelta(minutes=dd["stock_step"])
+        cutoff = self._cutoff(day, at) if at else None
+        stocks = []
+        for s in self.syms:
+            rows = dd["stocks"].get(s) or []
+            if cutoff:
+                rows = [c for c in rows if c["ts"] + step <= cutoff]
+            pd = self._prev_day(s, day)
+            if not rows or not pd:
+                continue
+            stocks.append(self._pack(s, rows[-1]["c"], rows[0]["o"], max(c["h"] for c in rows), min(c["l"] for c in rows), pd["c"], pd,
+                                     self._first5(rows, dd["stock_step"])))
+        last = max((rows[-1]["ts"] for rows in dd["stocks"].values() if rows), default=None)
+        end = last + step if last else self._cutoff(day, "15:30")
+        data_time = min(cutoff, end) if cutoff else end
+        return {"time": data_time.isoformat(), "dataTime": data_time.isoformat(), "session": day.isoformat(), "past": True, "stocks": stocks,
+                "sectors": self.sectors_payload(day, cutoff, dd["idx"], dt.timedelta(minutes=5))}
+
+    def snapshot(self, at=None, date=None):
+        if date and date != self.latest_session():
+            return self._snapshot_day(date, at)
         now = self.prov.now()
         # Live quote path (brokers)
         if at is None and hasattr(self.prov, "quotes"):
@@ -484,15 +560,18 @@ class Store:
         h, m = [int(x) for x in at.split(":")[:2]]
         return dt.datetime.combine(day, dt.time(h, m), tzinfo=IST)
 
-    def candles(self, sym, tf):
+    def candles(self, sym, tf, date=None):
         if sym not in self.meta:
             return None
         sess = self.session_date() if self.intra else self.prov.now().date()
+        past = bool(date and date != self.latest_session())
+        if past:
+            sess = date
         if tf == "1d":
             rows = [c for c in self.daily.get(sym, []) if c["ts"].date() < sess][-30:]
             return [{"t": c["ts"].date().isoformat(), "o": c["o"], "h": c["h"], "l": c["l"], "c": c["c"]} for c in rows]
-        rows = self.intra.get(sym)
-        if rows is None and hasattr(self.prov, "quotes"):
+        rows = self.day_data(date)["stocks"].get(sym) if past else self.intra.get(sym)
+        if rows is None and not past and hasattr(self.prov, "quotes"):
             now = self.prov.now()
             rows = self.prov.intraday([sym]).get(sym, [])
         rows = rows or []
@@ -547,13 +626,29 @@ def make_handler(store, app_path):
                     return self._send(200, html.encode(), "text/html")
                 if u.path == "/health":
                     return self._send(200, store.health())
+                date = None
+                if q.get("date"):
+                    try:
+                        date = dt.date.fromisoformat(q["date"])
+                    except ValueError:
+                        return self._send(400, {"error": "date must look like 2026-11-17"})
+                    if date > store.prov.now().date():
+                        return self._send(404, {"error": "that date is in the future"})
+                if u.path == "/sessions":
+                    return self._send(200, store.sessions())
                 if u.path == "/snapshot":
                     at = q.get("at")
                     if at and not (len(at) >= 4 and ":" in at):
                         return self._send(400, {"error": "at must look like 09:20"})
-                    return self._send(200, store.snapshot(at))
+                    try:
+                        return self._send(200, store.snapshot(at, date))
+                    except LookupError as e:
+                        return self._send(404, {"error": str(e)})
                 if u.path == "/candles":
-                    rows = store.candles(q.get("symbol", ""), q.get("tf", "5m"))
+                    try:
+                        rows = store.candles(q.get("symbol", ""), q.get("tf", "5m"), date)
+                    except LookupError as e:
+                        return self._send(404, {"error": str(e)})
                     return self._send(404, {"error": "unknown symbol"}) if rows is None else self._send(200, rows)
                 self._send(404, {"error": "not found"})
             except Exception as e:

@@ -6,118 +6,340 @@
 <title>9:20 Sector Scanner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-/* Layout idea: one terminal-style column. Header clock + lock status, scrolling view, bottom tab bar. Green/red carry market direction only; amber is the app accent. */
+/* 9:20 Scanner. A calm trading desk: quiet surfaces, numbers in mono, green/red only for market direction, amber marks the app's own state (scan time, lock, selection). */
 :root{
-  --bg:#0b1016; --panel:#131a23; --panel2:#19222d; --line:#263243;
-  --text:#e8edf4; --muted:#8696ab; --accent:#f2b84b;
-  --up:#23b384; --down:#ea5a52; --neutral:#1b2531;
-  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --r-lg:14px; --r:10px; --r-sm:7px;
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+/* Themes. Each picks one base hue for the neutrals and one accent from colour theory; green/red stay reserved for market direction
+   and are tuned per background for contrast. --heat-* are "r,g,b" for the heatmap ramp (read by the script). */
+/* Slate (default): cool blue-grey neutrals (hue ~215) + warm amber accent = complementary pair. Lifted from near-black for comfort. */
+:root,[data-theme=slate]{
+  --bg:#1a212c; --surface:#222a37; --surface2:#29323f; --surface3:#323c4b; --hover:#2c3543;
+  --line:#323c4b; --line2:#425062;
+  --text:#eef2f7; --text2:#c6cfdb; --muted:#929eb0;
+  --accent:#f5b84a; --accent-soft:rgba(245,184,74,.15); --accent-ink:#241a04;
+  --up:#1fe08a; --up-soft:rgba(31,224,138,.16); --down:#ff4d5e; --down-soft:rgba(255,77,94,.16);
+  --heat-n:52,62,77; --heat-up:0,200,105; --heat-down:240,44,62;
+  --pick-ring:rgba(255,255,255,.95); --glow:rgba(245,184,74,.06); --shadow:0 6px 20px rgba(0,0,0,.18); --nav:rgba(34,42,55,.94);
+  color-scheme:dark;
+}
+/* Daylight: light, cool neutrals (hue ~215) + indigo accent. Indigo sits between the green and red hues, so it never reads as a market signal. */
+[data-theme=daylight]{
+  --bg:#f2f5f9; --surface:#ffffff; --surface2:#f3f6fa; --surface3:#e7ecf2; --hover:#eef2f7;
+  --line:#e2e8f0; --line2:#cdd6e1;
+  --text:#152030; --text2:#3a475a; --muted:#68758a;
+  --accent:#4f5bd5; --accent-soft:rgba(79,91,213,.11); --accent-ink:#ffffff;
+  --up:#00a650; --up-soft:rgba(0,166,80,.12); --down:#e5162e; --down-soft:rgba(229,22,46,.10);
+  --heat-n:228,233,240; --heat-up:0,184,86; --heat-down:236,32,56;
+  --pick-ring:#152030; --glow:rgba(79,91,213,.05); --shadow:0 4px 14px rgba(21,32,48,.07); --nav:rgba(255,255,255,.94);
+  color-scheme:light;
+}
+/* Sand: warm paper neutrals (hue ~40) + teal accent, its complement. Lower glare for long sessions. */
+[data-theme=sand]{
+  --bg:#f5efe4; --surface:#fffcf6; --surface2:#f6efe3; --surface3:#ece3d4; --hover:#f2eadc;
+  --line:#e8ddcb; --line2:#d6c7b0;
+  --text:#2b2419; --text2:#4f4636; --muted:#857a66;
+  --accent:#0e8585; --accent-soft:rgba(14,133,133,.11); --accent-ink:#ffffff;
+  --up:#0f9a4a; --up-soft:rgba(15,154,74,.13); --down:#d92b2b; --down-soft:rgba(217,43,43,.11);
+  --heat-n:236,228,214; --heat-up:10,170,80; --heat-down:226,40,40;
+  --pick-ring:#2b2419; --glow:rgba(14,133,133,.04); --shadow:0 4px 14px rgba(70,50,20,.07); --nav:rgba(255,252,246,.94);
+  color-scheme:light;
+}
+/* Ocean: analogous blues (hue ~210) + aqua accent from the same family; a medium-dark theme with more colour than Slate. */
+[data-theme=ocean]{
+  --bg:#152a42; --surface:#1c3451; --surface2:#233d5c; --surface3:#2c4869; --hover:#26425f;
+  --line:#2d4867; --line2:#3d5b7d;
+  --text:#ecf4fc; --text2:#c0d3e6; --muted:#8fa8c2;
+  --accent:#5ad6c8; --accent-soft:rgba(90,214,200,.15); --accent-ink:#06231f;
+  --up:#2bf09a; --up-soft:rgba(43,240,154,.16); --down:#ff5a6e; --down-soft:rgba(255,90,110,.16);
+  --heat-n:42,68,98; --heat-up:0,206,120; --heat-down:246,52,78;
+  --pick-ring:rgba(255,255,255,.95); --glow:rgba(90,214,200,.07); --shadow:0 6px 20px rgba(0,10,25,.2); --nav:rgba(28,52,81,.94);
   color-scheme:dark;
 }
 *{box-sizing:border-box}
-html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;-webkit-text-size-adjust:100%}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.45;-webkit-text-size-adjust:100%;-webkit-font-smoothing:antialiased}
+body{background:radial-gradient(1200px 500px at 50% -200px,var(--glow),transparent 70%),var(--bg)}
 button,input,select{font:inherit;color:inherit}
 button{cursor:pointer}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+button:disabled{cursor:not-allowed}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .up{color:var(--up)} .down{color:var(--down)} .muted{color:var(--muted)}
-#app{height:100%;display:flex;flex-direction:column;max-width:1100px;margin:0 auto}
-header{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
-.brand{display:flex;align-items:center;gap:8px;font-weight:600;letter-spacing:.2px;white-space:nowrap}
-.brand i{width:10px;height:10px;border-radius:2px;background:var(--accent);display:inline-block}
-.tag{font-family:var(--mono);font-size:11px;padding:2px 6px;border:1px solid var(--line);border-radius:4px;color:var(--muted)}
-.tag.live{color:var(--up);border-color:var(--up)}
 .spacer{flex:1}
-.clock{font-family:var(--mono);font-size:18px;font-weight:500}
-.pill{font-family:var(--mono);font-size:12px;padding:4px 8px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
-.pill.wait{color:var(--accent);border-color:var(--accent)}
-.pill.lock{color:var(--text);background:var(--panel2)}
-.transport{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
-.transport input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}
-.btn{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-size:13px}
-.btn:hover{border-color:var(--muted)}
-.btn.primary{background:var(--accent);color:#1a1405;border-color:var(--accent);font-weight:600}
-.btn.sm{padding:4px 9px;font-size:12px}
-select.btn{padding-right:6px}
-main{flex:1;overflow-y:auto;padding:14px 16px 20px}
-nav.tabs{display:flex;border-top:1px solid var(--line);background:var(--panel);padding-bottom:env(safe-area-inset-bottom)}
-nav.tabs button{flex:1;padding:13px 4px;background:none;border:0;border-top:2px solid transparent;color:var(--muted);font-size:13px;font-weight:500}
-nav.tabs button[aria-selected=true]{color:var(--text);border-top-color:var(--accent)}
-h2{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin:0 0 8px}
-.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
-.crumbs{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
-.crumbs .btn.on{background:var(--text);color:var(--bg);border-color:var(--text)}
-.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.seg button{background:var(--panel);border:0;padding:6px 12px;font-size:13px;color:var(--muted)}
-.seg button[aria-pressed=true]{background:var(--panel2);color:var(--text)}
+.hint{font-size:12px;color:var(--muted)}
+
+/* ---------- shell ---------- */
+#app{height:100%;display:flex;flex-direction:column;max-width:1240px;margin:0 auto}
+header{order:0;display:flex;align-items:center;gap:14px;padding:12px 20px;flex-wrap:wrap;row-gap:10px}
+.brand{display:flex;align-items:center;gap:10px;white-space:nowrap}
+.logo{display:grid;place-items:center;height:32px;padding:0 8px;border-radius:9px;background:var(--accent);color:var(--accent-ink);font:700 13px/1 var(--mono);letter-spacing:-.02em}
+.bt{display:flex;flex-direction:column;line-height:1.15}
+.bt b{font-weight:600;font-size:14px;letter-spacing:-.01em}
+.tag{align-self:flex-start;margin-top:3px;font:600 9.5px/1 var(--mono);letter-spacing:.08em;padding:3px 6px 3px 6px;border-radius:999px;background:var(--surface3);color:var(--muted)}
+.tag.live{background:var(--up-soft);color:var(--up)}
+.tag.live::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--up);margin-right:5px;vertical-align:1px;box-shadow:0 0 0 0 rgba(46,197,141,.6)}
+@media (prefers-reduced-motion:no-preference){.tag.live::before{animation:pulse 2s infinite}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(46,197,141,.55)}70%{box-shadow:0 0 0 6px rgba(46,197,141,0)}100%{box-shadow:0 0 0 0 rgba(46,197,141,0)}}
+.hgroup{display:flex;align-items:center;gap:8px}
+.dgroup{display:flex;align-items:center;gap:6px}
+.datepick{display:flex;align-items:center;gap:7px;height:34px;padding:0 10px;border-radius:10px;background:var(--surface);border:1px solid var(--line);color:var(--muted);cursor:pointer}
+.datepick:focus-within{border-color:var(--accent)}
+.datepick input{background:none;border:0;outline:none;color:var(--text);font:500 12.5px var(--mono);color-scheme:inherit;cursor:pointer}
+.datepick.past{border-color:var(--accent);background:var(--accent-soft)}
+.datepick.past svg{color:var(--accent)}
+#latestBtn[hidden],.dgroup[hidden]{display:none}
+.hlabel{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.clockbox{display:flex;flex-direction:column;align-items:flex-end;line-height:1.1}
+.clock{font:600 20px/1 var(--mono);letter-spacing:-.02em}
+.clockbox .sub{font-size:10.5px;color:var(--muted);margin-top:3px;letter-spacing:.04em}
+.pill{display:inline-flex;align-items:center;gap:6px;font:500 12px/1 var(--sans);padding:8px 11px;border-radius:999px;white-space:nowrap}
+.pill svg.i{width:14px;height:14px}
+.pill.wait{color:var(--accent);background:var(--accent-soft)}
+.pill.lock{color:var(--text);background:var(--surface3)}
+.pill.lock svg{color:var(--accent)}
+
+nav.tabs{order:3;display:flex;background:var(--nav);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:4px 6px calc(4px + env(safe-area-inset-bottom))}
+nav.tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;background:none;border:0;border-radius:10px;color:var(--muted);font-size:11.5px;font-weight:500;position:relative}
+nav.tabs button svg.i{width:20px;height:20px}
+nav.tabs button:hover{color:var(--text2)}
+nav.tabs button[aria-selected=true]{color:var(--text)}
+nav.tabs button[aria-selected=true] svg{color:var(--accent)}
+.badge{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--accent);color:var(--accent-ink);font:700 10.5px/1 var(--mono)}
+.badge[hidden]{display:none}
+nav.tabs .badge{position:absolute;top:3px;left:calc(50% + 6px)}
+
+.transport{order:1;display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 20px 6px;padding:8px 10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.transport input[type=range]{flex:1;min-width:140px;accent-color:var(--accent)}
+main{order:2;flex:1;overflow-y:auto;padding:14px 20px 28px;scrollbar-color:var(--line2) transparent}
+
+@media (min-width:900px){
+  nav.tabs{order:1;border-top:0;border-bottom:1px solid var(--line);background:transparent;backdrop-filter:none;padding:0 14px;gap:4px}
+  nav.tabs button{flex:0 0 auto;flex-direction:row;gap:8px;padding:11px 14px 12px;font-size:13.5px;border-radius:0;border-bottom:2px solid transparent;margin-bottom:-1px}
+  nav.tabs button svg.i{width:17px;height:17px}
+  nav.tabs button[aria-selected=true]{border-bottom-color:var(--accent)}
+  nav.tabs .badge{position:static}
+  .transport{order:2;margin:12px 20px 0}
+  main{order:3;padding:18px 20px 32px}
+}
+@media (max-width:640px){
+  header{padding:10px 14px;gap:10px}
+  .hlabel{display:none}
+  .dgroup{order:4}
+  .hgroup{order:5;flex:1 1 55%}
+  .pill{order:6}
+  .hgroup .seg{flex:1}.hgroup .seg button{flex:1}
+  main{padding:12px 14px 24px}
+  .transport{margin:0 14px 6px}
+}
+
+/* ---------- controls ---------- */
+.btn{display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:8px 13px;font-size:13px;font-weight:500;transition:background .15s,border-color .15s}
+.btn:hover{background:var(--hover);border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.btn.sm{padding:5px 10px;font-size:12px}
+select.btn{padding-right:8px}
+.iconbtn{display:grid;place-items:center;width:36px;height:36px;border-radius:var(--r-sm);background:var(--surface2);border:1px solid var(--line2)}
+.iconbtn:hover{background:var(--hover)}
+.seg{display:inline-flex;padding:3px;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.seg button{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:none;border:0;border-radius:7px;padding:6px 12px;font-size:12.5px;font-weight:500;color:var(--muted);white-space:nowrap;transition:background .15s,color .15s}
+.seg button:hover:not(:disabled){color:var(--text2)}
+.seg button[aria-pressed=true]{background:var(--surface3);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.seg button:disabled{opacity:.4}
+.seg.lg button{padding:8px 16px;font-size:13.5px}
 .seg button.buy[aria-pressed=true]{color:var(--up)} .seg button.sell[aria-pressed=true]{color:var(--down)}
-.heatbox{position:relative;width:100%;height:clamp(340px,60vh,620px);background:var(--bg);border-radius:6px;overflow:hidden}
-.tile{position:absolute;border-radius:4px;padding:6px 7px;overflow:hidden;cursor:pointer;border:0;text-align:left;color:#fff;display:flex;flex-direction:column;justify-content:space-between;line-height:1.15}
-.tile:hover{filter:brightness(1.15)}
-.seclist{margin-top:14px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.seclist .hd{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line)}
-.secrow{display:grid;grid-template-columns:24px 1fr auto 64px 70px;gap:8px;align-items:center;width:100%;padding:7px 10px;background:none;border:0;border-bottom:1px solid var(--line);color:inherit;font:inherit;text-align:left;cursor:pointer}
-.tag{font-size:9px;text-transform:uppercase;letter-spacing:.04em;padding:1px 4px;border-radius:3px;border:1px solid var(--line);color:var(--muted);vertical-align:middle}
-.secrow:last-child{border-bottom:0}.secrow:hover{background:rgba(255,255,255,.04)}.secrow b{text-align:right}.secrow .chip{justify-self:start}
-.tile .t1{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tile .t2{font-family:var(--mono);font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:4px}
-.tile.small{padding:2px 4px}.tile.small .t1{font-size:10px}.tile.small .t2{font-size:10px}
-.tile.big .t1{font-size:16px} .tile.big .t2{font-size:15px}
-.tile .bdg{font-family:var(--mono);font-size:10px;font-weight:600;padding:1px 5px;border-radius:3px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.6);white-space:nowrap}
-.tile.pickB{box-shadow:inset 0 0 0 2px #fff}
-.tile.pickS{box-shadow:inset 0 0 0 2px #fff}
-.legend{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:8px}
-.legend .bar{flex:1;height:8px;border-radius:4px;background:linear-gradient(90deg,#b8372f,var(--neutral),#1b9c70)}
-.picks{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;font-size:13px}
-.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);background:var(--panel);font-size:12px}
-.chip.ok{border-color:var(--up);color:var(--up)} .chip.no{color:var(--muted)} .chip.bad{border-color:var(--down);color:var(--down)}
-button.chip{cursor:pointer}
-.banner{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;display:flex;flex-direction:column;gap:8px}
-.banner b{font-weight:600}
-.cards{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px;cursor:pointer;text-align:left;width:100%}
-.card:hover{border-color:var(--muted)}
-.card .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
-.card .sym{font-weight:600;font-size:16px}
-.card .sec{display:block;font-size:12px;color:var(--muted)}
-.card .px{text-align:right;font-family:var(--mono)}
-.card .px b{font-size:16px;font-weight:500;display:block}
-.card .mid{display:flex;gap:10px;align-items:center}
-.card .checks{display:flex;flex-wrap:wrap;gap:5px}
-.card .foot{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
-.empty{padding:28px 12px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:10px}
-details{margin-top:16px} summary{cursor:pointer;color:var(--muted);font-size:13px;margin-bottom:10px}
-.statline{display:flex;flex-wrap:wrap;gap:16px;margin:8px 0 12px;font-size:13px}
-.statline span b{font-family:var(--mono);font-weight:500;margin-left:4px}
-.chartwrap{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:12px}
-.chartwrap .hd{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px;font-size:13px}
-canvas{width:100%;height:280px;display:block;touch-action:pan-y}
+.cnt{font:600 11px/1 var(--mono);padding:3px 6px;border-radius:999px;background:var(--surface2);color:var(--text2)}
+.seg button.buy[aria-pressed=true] .cnt{background:var(--up-soft);color:var(--up)}
+.seg button.sell[aria-pressed=true] .cnt{background:var(--down-soft);color:var(--down)}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;border:1px solid transparent;background:var(--surface2);font-size:12px;font-weight:500;color:var(--text2);white-space:nowrap}
+.chip.ok{background:var(--up-soft);color:var(--up)} .chip.bad{background:var(--down-soft);color:var(--down)} .chip.no{color:var(--muted);background:transparent;border-color:var(--line2)}
+button.chip{cursor:pointer;transition:filter .15s} button.chip:hover{filter:brightness(1.2)}
+.ctag{font:600 9px/1 var(--sans);text-transform:uppercase;letter-spacing:.07em;padding:3px 5px;border-radius:4px;background:var(--surface3);color:var(--muted);vertical-align:2px}
+.pl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:500;margin-right:2px}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.card-surface,.pickbar,.summary,.seclist,.qhead,.chartwrap,.sgroup,.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg)}
+
+/* ---------- heatmap ---------- */
+.toolbar{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.crumbs{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.crumb{background:none;border:0;padding:4px 2px;font-size:15px;font-weight:600;color:var(--muted)}
+button.crumb:hover{color:var(--text)}
+.crumb.on{color:var(--text)}
+.crumbs .sep{color:var(--line2);font-size:15px}
+.legend{margin-left:auto;display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.legend .bar{width:140px;height:6px;border-radius:3px;background:linear-gradient(90deg,rgb(var(--heat-down)),rgb(var(--heat-n)) 50%,rgb(var(--heat-up)))}
+.heatgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.heatgrid.stocks{grid-template-columns:repeat(auto-fill,minmax(128px,1fr))}
+.heatgrid>.empty{grid-column:1/-1}
+.tile{position:relative;min-height:88px;border-radius:10px;padding:10px 11px;overflow:hidden;cursor:pointer;border:0;text-align:left;color:#fff;display:flex;flex-direction:column;gap:4px;line-height:1.15;text-shadow:0 1px 2px rgba(0,0,0,.25)}
+.tile.ink-dark{text-shadow:none}
+.tile:hover{filter:brightness(1.1)}
+.tile .t0{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;min-width:0}
+.tile .t1{font-weight:600;font-size:12.5px;letter-spacing:.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tile .t2{font:700 19px/1.1 var(--mono);letter-spacing:-.02em;margin-top:auto}
+.tile .t3{font:500 11px/1 var(--mono);opacity:.8}
+.tile .rk{font:600 10px/1 var(--mono);opacity:.55;padding-top:2px}
+.tile .bdg{flex:none;font:700 9.5px/1 var(--mono);letter-spacing:.04em;padding:4px 6px;border-radius:5px;background:rgba(10,14,20,.6);color:#fff;white-space:nowrap;text-shadow:none}
+.tile.ink-dark .bdg{background:rgba(255,255,255,.75);color:#152030}
+.tile.pickB,.tile.pickS{box-shadow:inset 0 0 0 2px var(--pick-ring)}
+@media (max-width:640px){.heatgrid{grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:5px}.heatgrid.stocks{grid-template-columns:repeat(auto-fill,minmax(98px,1fr))}.tile{min-height:76px;padding:8px 9px}.tile .t2{font-size:16px}.tile .t1{font-size:11.5px}}
+.pickbar{margin-top:12px;padding:12px 14px;display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center}
+.pg{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.pickbar .hint{flex-basis:100%;margin:0}
+.seclist{margin-top:14px;overflow:hidden}
+.seclist .hd{display:flex;justify-content:space-between;align-items:baseline;padding:13px 16px 10px}
+.seclist .hd b{font-size:14px;font-weight:600}
+.secgrid{display:grid;grid-template-columns:28px minmax(150px,1.6fr) 96px 78px 64px 64px minmax(140px,1.2fr);gap:12px;align-items:center}
+.sechead{padding:8px 16px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:500}
+.secrow{width:100%;padding:10px 16px;background:none;border:0;border-bottom:1px solid var(--line);color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background .12s}
+.secrow:last-child{border-bottom:0}.secrow:hover{background:var(--hover)}
+.secrow .nm{font-weight:500;display:flex;align-items:center;gap:6px;min-width:0}
+.secrow .nm span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.secrow .r{text-align:right}
+.secrow .chg{display:flex;align-items:center;gap:10px}
+.secrow .chg b{min-width:58px;text-align:right;font-weight:600}
+.dbar{position:relative;flex:1;height:6px;border-radius:3px;background:var(--surface3)}
+.dbar::after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--line2)}
+.dbar i{position:absolute;top:0;bottom:0;border-radius:3px}
+.dbar i.pos{left:50%;background:var(--up)} .dbar i.neg{right:50%;background:var(--down)}
+.ad{font-size:12px;white-space:nowrap}
+@media (max-width:760px){
+  .secgrid{grid-template-columns:22px 1fr 58px minmax(96px,.9fr);gap:8px}
+  .secgrid .c-val,.secgrid .c-ad,.secgrid .c-n{display:none}
+  .secrow{padding:10px 12px}.sechead{padding:8px 12px}
+  .dbar{display:none}
+  .legend .bar{width:80px}
+}
+
+/* ---------- shortlist ---------- */
+.summary{padding:14px 16px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:12px 28px;align-items:center}
+.summary .st{display:flex;gap:12px;align-items:center;flex:1 1 320px;min-width:0}
+.sti{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;background:var(--surface3);color:var(--muted);flex:none}
+.summary.locked .sti{background:var(--accent-soft);color:var(--accent)}
+.summary.live .sti{background:var(--up-soft);color:var(--up)}
+.summary b{font-weight:600;font-size:14.5px}
+.summary p{margin:2px 0 0;color:var(--muted);font-size:12.5px}
+.summary .sp{display:flex;flex-direction:column;gap:8px}
+.sidebar{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.cards{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.card{padding:0;display:flex;flex-direction:column;cursor:pointer;text-align:left;width:100%;overflow:hidden;transition:border-color .15s,transform .15s,background .15s;box-shadow:var(--shadow)}
+.pickbar,.summary,.seclist,.qhead,.chartwrap,.sgroup{box-shadow:var(--shadow)}
+.card:hover{border-color:var(--line2);background:var(--hover)}
+@media (prefers-reduced-motion:no-preference){.card:hover{transform:translateY(-1px)}}
+.card>span{display:flex}
+.card .ch{justify-content:space-between;align-items:flex-start;gap:8px;padding:14px 16px 10px;border-left:3px solid transparent}
+.card.buy .ch{border-left-color:var(--up)} .card.sell .ch{border-left-color:var(--down)}
+.card .sym{display:block;font-weight:700;font-size:16px;letter-spacing:-.01em}
+.card .sec{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
+.card .px{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.card .ltp{font:600 16px/1 var(--mono)}
+.chg{font:600 11.5px/1 var(--mono);padding:4px 7px;border-radius:6px}
+.chg.up{background:var(--up-soft)} .chg.down{background:var(--down-soft)} .chg.muted{background:var(--surface3)}
+.card .cb{gap:14px;padding:4px 16px 14px;align-items:center}
+.card .pdc{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 8px;border-radius:9px;background:var(--surface2);flex:none}
+.card .pdc small{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.checks{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1}
+.ck{display:flex;align-items:flex-start;line-height:18px;gap:8px;font-size:12.5px;min-width:0}
+.ck i{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;flex:none}
+.ck i svg.i{width:11px;height:11px;stroke-width:2.6}
+.ck.ok i{background:var(--up-soft);color:var(--up)} .ck.bad i{background:var(--down-soft);color:var(--down)}
+.ck em{font-style:normal;color:var(--muted);width:74px;flex:none}
+.ck>span{color:var(--text2);min-width:0;overflow-wrap:anywhere}
+.ck.bad>span{color:var(--down)}
+.card .cf{justify-content:space-between;gap:8px;flex-wrap:wrap;padding:9px 16px;border-top:1px solid var(--line);background:var(--surface2);font-size:11.5px;color:var(--muted)}
+.empty{display:flex;flex-direction:column;align-items:center;gap:6px;padding:36px 16px;text-align:center;color:var(--muted);border:1px dashed var(--line2);border-radius:var(--r-lg)}
+.empty svg.i{width:26px;height:26px;color:var(--line2);margin-bottom:4px}
+.empty b{color:var(--text2);font-weight:500}
+.empty .err{color:var(--down);font-weight:600}
+.empty p{margin:0;max-width:520px;font-size:12.5px}
+details.near{margin-top:18px}
+details.near>summary{list-style:none;display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 0;color:var(--text2);font-weight:500}
+details.near>summary::-webkit-details-marker{display:none}
+details.near>summary svg.i{transition:transform .2s;color:var(--muted)}
+details.near[open]>summary svg.i{transform:rotate(90deg)}
+details.near>summary .badge{background:var(--surface3);color:var(--text2)}
+details.near .cards{opacity:.92}
+.spin{width:22px;height:22px;border-radius:50%;border:2px solid var(--line2);border-top-color:var(--accent);margin-bottom:6px}
+@media (prefers-reduced-motion:no-preference){.spin{animation:spin .9s linear infinite}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- chart ---------- */
+.ctool{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.search{display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;background:var(--surface);border:1px solid var(--line2);border-radius:var(--r-sm);color:var(--muted)}
+.search:focus-within{border-color:var(--accent)}
+.search input{background:none;border:0;outline:none;width:150px;font-family:var(--mono);font-weight:500;text-transform:uppercase;color:var(--text)}
+.quick{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:14px}
+.quick:empty{display:none}
+.quick .pl:not(:first-child){margin-left:8px}
+.qhead{padding:14px 16px;margin-bottom:12px}
+.qt{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.qsym{font-size:22px;font-weight:700;letter-spacing:-.02em}
+.qt .sec{font-size:12px;color:var(--muted)}
+.qt .chip{margin-left:auto}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
+.stat{background:var(--surface2);border-radius:9px;padding:9px 11px;display:flex;flex-direction:column;gap:3px}
+.stat>span{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+.stat b{font:600 14px/1.2 var(--mono)}
+.stat em{font:600 11.5px/1 var(--mono);font-style:normal}
+.chartwrap{padding:12px 14px 10px;margin-bottom:12px}
+.chartwrap .hd{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:13px}
+.chartwrap .hd b{font-weight:600}
+canvas{width:100%;height:300px;display:block;touch-action:pan-y}
 canvas.short{height:220px}
-.readout{min-height:18px;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:4px}
-.picker{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
-.picker input{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;width:150px;font-family:var(--mono);text-transform:uppercase}
-.form{display:grid;gap:14px;max-width:560px}
-.field{display:grid;gap:4px}
-.field label{font-weight:500}
-.field small{color:var(--muted);font-size:12px}
-.field input[type=number],.field input[type=text],.field input[type=time],.field select{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%}
-.field.chk{display:flex;align-items:center;gap:10px}
-.field.chk input{width:20px;height:20px;accent-color:var(--accent)}
-.note{font-size:12px;color:var(--muted);line-height:1.5}
+.readout{min-height:18px;font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:6px}
+
+/* ---------- settings ---------- */
+.settings{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));align-items:start}
+.sgroup{padding:16px}
+.sgroup header{all:unset;display:block;margin-bottom:14px}
+.eyebrow{display:block;font-size:10.5px;color:var(--accent);text-transform:uppercase;letter-spacing:.09em;font-weight:600;margin-bottom:3px}
+.sgroup h3{margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em}
+.sfields{display:grid;gap:14px}
+.field{display:grid;gap:6px;transition:opacity .2s}
+.field.dim{opacity:.45}
+.field label{font-weight:500;font-size:13px}
+.field small{color:var(--muted);font-size:12px;line-height:1.45}
+.field input[type=number],.field input[type=text],.field input[type=time],.field select{background:var(--bg);border:1px solid var(--line2);border-radius:var(--r-sm);padding:9px 11px;width:100%;transition:border-color .15s}
+.field input:focus,.field select:focus{border-color:var(--accent);outline:none}
+.switch{display:flex;align-items:flex-start;gap:12px;cursor:pointer;font-size:13px;font-weight:500}
+.switch input{position:absolute;opacity:0;width:1px;height:1px}
+.track{position:relative;flex:none;width:36px;height:20px;border-radius:999px;background:var(--surface3);border:1px solid var(--line2);transition:background .2s}
+.track::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--muted);transition:transform .2s,background .2s}
+.switch input:checked+.track{background:var(--accent-soft);border-color:var(--accent)}
+.switch input:checked+.track::after{transform:translateX(16px);background:var(--accent)}
+.switch input:focus-visible+.track{outline:2px solid var(--accent);outline-offset:2px}
+.switch .lbl small{display:block;font-weight:400;color:var(--muted);font-size:12px;margin-top:2px}
+.themes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.swatch{position:relative;display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:var(--r);border:1px solid var(--line2);background:var(--surface2);cursor:pointer;transition:border-color .15s}
+.swatch:hover{border-color:var(--muted)}
+.swatch input{position:absolute;opacity:0;width:1px;height:1px}
+.swatch:has(input:checked){border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.swatch:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.sw{display:flex;height:34px;border-radius:7px;overflow:hidden;border:1px solid rgba(0,0,0,.12)}
+.sw i{flex:1}.sw i:first-child{flex:2}
+.swatch b{font-size:13px;font-weight:600}
+.swatch small{display:block;font-size:11.5px;color:var(--muted);font-weight:400}
+.sactions{grid-column:1/-1;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+details.dev{grid-column:1/-1;color:var(--muted);font-size:12px}
+details.dev summary{cursor:pointer;padding:6px 0}
+.note{font-size:12px;color:var(--muted);line-height:1.6}
+.note .num{color:var(--text2)}
 .err{color:var(--down);font-size:13px}
-@media (prefers-reduced-motion:no-preference){.tile{transition:background-color .4s}}
+@media (prefers-reduced-motion:no-preference){.tile{transition:filter .15s}}
 </style>
 </head>
 <body>
 <div id="app">
   <header>
-    <div class="brand"><i></i>9:20 Scanner</div><span class="tag" id="modeTag">DEMO</span>
+    <div class="brand"><span class="logo">9:20</span><div class="bt"><b>Sector Scanner</b><span class="tag" id="modeTag">DEMO</span></div></div>
     <div class="spacer"></div>
-    <span class="seg" id="viewSeg" role="group" aria-label="Prices shown on every tab"></span>
-    <div class="clock" id="clock">09:20</div>
+    <div class="dgroup" id="dateBox"><label class="datepick" title="Trading day to show"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><input type="date" id="dateIn" aria-label="Trading day"></label><button class="btn sm" id="latestBtn" data-act="latest" hidden>Latest</button></div>
+    <div class="hgroup"><span class="hlabel">Prices</span><span class="seg" id="viewSeg" role="group" aria-label="Prices shown on every tab"></span></div>
+    <div class="clockbox"><div class="clock" id="clock">09:20</div><div class="sub" id="sessionLbl">IST</div></div>
     <div class="pill wait" id="status">…</div>
   </header>
   <div class="transport" id="transport">
@@ -131,10 +353,10 @@ canvas.short{height:220px}
   </div>
   <main id="main"></main>
   <nav class="tabs" role="tablist" aria-label="Views">
-    <button role="tab" data-tab="heat" aria-selected="true">Heatmap</button>
-    <button role="tab" data-tab="short" aria-selected="false">Shortlist <span class="num" id="shortCount"></span></button>
-    <button role="tab" data-tab="chart" aria-selected="false">Chart</button>
-    <button role="tab" data-tab="set" aria-selected="false">Settings</button>
+    <button role="tab" data-tab="heat" aria-selected="true"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="10" rx="2"/><rect x="13" y="3" width="8" height="6" rx="2"/><rect x="13" y="11" width="8" height="10" rx="2"/><rect x="3" y="15" width="8" height="6" rx="2"/></svg><span>Heatmap</span></button>
+    <button role="tab" data-tab="short" aria-selected="false"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h9M4 12h9M4 18h6"/><path d="M15 17l2.5 2.5L22 15"/></svg><span>Shortlist</span><span class="badge" id="shortCount" hidden></span></button>
+    <button role="tab" data-tab="chart" aria-selected="false"><svg class="i" viewBox="0 0 24 24"><path d="M6 3v4M6 17v4M18 3v3M18 15v6M12 6v3M12 19v2"/><rect x="4" y="7" width="4" height="10" rx="1"/><rect x="16" y="6" width="4" height="9" rx="1"/><rect x="10" y="9" width="4" height="10" rx="1"/></svg><span>Chart</span></button>
+    <button role="tab" data-tab="set" aria-selected="false"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg><span>Settings</span></button>
   </nav>
 </div>
 <script>
@@ -166,7 +388,8 @@ const DEFAULT_CFG = {
   n200TopK: 20,       // must be inside top-K gainers (buy) / losers (sell) of the universe
   wickMode: 'pct',    // 'pct' = wick >= wickPct of range AND longer wick; 'longer' = only the longer wick
   wickPct: 40,        // previous-day wick must be >= this % of the day's range (wickMode 'pct')
-  firstCandle: true,  // 09:15-09:20 candle must be green for buys, red for sells
+  firstCandle: true,
+  theme: 'slate',     // slate | daylight | sand | ocean  // 09:15-09:20 candle must be green for buys, red for sells
   scanTime: '09:20',
   autoScan: true,
   weighting: 'cap',   // 'cap' or 'equal'
@@ -326,6 +549,15 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
   const cls = n => n > 0 ? 'up' : n < 0 ? 'down' : 'muted';
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const KEY = 'scan920.cfg.v1';
+  const IC = {
+    check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', x: '<path d="M7 7l10 10M17 7L7 17"/>',
+    lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+    clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>', pulse: '<path d="M3 12h4l2.5-6 5 12 2.5-6h4"/>',
+    search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>', left: '<path d="M15 6l-6 6 6 6"/>', right: '<path d="M9 6l6 6-6 6"/>',
+    alert: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.5v.01"/>', inbox: '<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1.5 2.5h5L16 13h5"/>'
+  };
+  const ico = n => '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">' + IC[n] + '</svg>';
+  const shortName = n => String(n).replace(/^NIFTY /, '');
   const HEAT_SCALE = 1.5; // % move that gives full colour
 
   // When the app is opened from the live server, point it at that server and start in live mode.
@@ -342,7 +574,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     cfg: loadCfg(), mkt: null, bymap: new Map(), qmap: new Map(), simMin: 5, playing: true,
     quotes: [], snap: null, locked: false, lockPending: false, scan: null,
     tab: 'heat', sector: null, view: 'lock', side: 'buy', sym: null, nearOpen: false,
-    liveErr: null, liveMin: 0, session: null, secLive: null, secSnap: null, lockGen: 0, timers: [], chartBuilt: false, cc: {}
+    liveErr: null, liveMin: 0, session: null, secLive: null, secSnap: null, lockGen: 0, date: null, dateGen: 0, sessions: null, polling: false, dateMsg: null, timers: [], chartBuilt: false, cc: {}
   };
 
   // ---------- time ----------
@@ -361,20 +593,42 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     return (arr || []).map(s => ({ symbol: s.symbol, sector: s.sector, weight: s.weight || 1, ltp: s.ltp, prevClose: s.prevClose, open: s.open, high: s.high, low: s.low, chg: (s.ltp / s.prevClose - 1) * 100, prevDay: s.prevDay, first5: s.first5 || null, sectors: s.sectors && s.sectors.length ? s.sectors : [s.sector] }));
   }
   S.endpointBase = () => String(S.cfg.endpoint || '').replace(/\/+$/, '');
+  // every request carries the chosen trading day; none = the latest session (today in market hours, else the previous trading day)
+  const dq = sep => S.date ? sep + 'date=' + S.date : '';
+
+  async function loadSessions() {
+    try {
+      const r = await fetch(S.endpointBase() + '/sessions', { cache: 'no-store' });
+      if (r.ok) { S.sessions = await r.json(); render(); }
+    } catch (e) { }
+  }
+
+  // switch every tab to another trading day (null = latest)
+  function setDate(d) {
+    const latest = S.sessions && S.sessions.default;
+    S.date = d && d !== latest ? d : null;
+    S.dateGen++; clearLock(); S.cc = {}; S.quotes = []; S.scan = null; S.secLive = null; S.session = null; S.liveErr = null; S.chartBuilt = false; S.polling = false;
+    render(true); pollLive();
+  }
 
   async function pollLive() {
+    if (S.polling) return;                     // a past day can take a few seconds to load the first time
+    S.polling = true; const gen = S.dateGen;
     try {
-      const r = await fetch(S.endpointBase() + '/snapshot', { cache: 'no-store' });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const d = await r.json();
+      const r = await fetch(S.endpointBase() + '/snapshot' + dq('?'), { cache: 'no-store' });
+      const d = await r.json().catch(() => ({}));
+      if (gen !== S.dateGen) return;           // the date changed while this was loading
+      if (!r.ok) { const e = new Error(d.error || 'HTTP ' + r.status); e.noData = r.status === 404; throw e; }
+      if (S.sessions && d.session && !S.date && d.session !== S.sessions.default) loadSessions();   // a new trading day started
       if (d.session && S.session && d.session !== S.session) { clearLock(); S.cc = {}; }
       S.session = d.session || null;
       S.quotes = normLive(d.stocks); S.secLive = d.sectors || null;
       const t = Date.parse(d.dataTime || d.time);
       const istMin = Math.floor(((isNaN(t) ? Date.now() : t) / 60000 + 330)) % 1440;
       S.liveMin = istMin - OPEN_MIN;
-      S.liveErr = null;
-    } catch (e) { S.liveErr = String(e && e.message || e); }
+      S.liveErr = null; S.noData = false;
+    } catch (e) { if (gen !== S.dateGen) return; S.liveErr = String(e && e.message || e); S.noData = !!e.noData; }
+    finally { if (gen === S.dateGen) S.polling = false; }
     update(); render();
   }
 
@@ -382,7 +636,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     if (S.lockPending) return; S.lockPending = true;
     const gen = S.lockGen;
     try {
-      const r = await fetch(S.endpointBase() + '/snapshot?at=' + encodeURIComponent(S.cfg.scanTime), { cache: 'no-store' });
+      const r = await fetch(S.endpointBase() + '/snapshot?at=' + encodeURIComponent(S.cfg.scanTime) + dq('&'), { cache: 'no-store' });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const d = await r.json();
       if (gen !== S.lockGen) return;                       // scan time or data source changed while this was loading
@@ -426,96 +680,122 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
       update(); render(true);
     } else {
       S.quotes = []; S.scan = null; S.liveErr = null;
+      S.date = null; S.dateGen++; S.polling = false; loadSessions();
       render(true); pollLive();
       S.timers.push(setInterval(pollLive, Math.max(2, +S.cfg.pollSec || 5) * 1000));
     }
   }
 
   // ---------- heatmap helpers ----------
+  const rgbVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).split(',').map(Number);
+  let HEAT = null;                                   // theme ramp, read once per render
   function heatColor(p) {
-    const t = Math.max(-1, Math.min(1, p / HEAT_SCALE)), n = [27, 37, 49], tgt = t >= 0 ? [27, 156, 112] : [184, 55, 47], a = Math.abs(t);
+    const t = Math.max(-1, Math.min(1, p / HEAT_SCALE)), a = Math.pow(Math.abs(t), 0.6), n = HEAT.n, tgt = t >= 0 ? HEAT.up : HEAT.down;
     return 'rgb(' + n.map((v, i) => Math.round(v + (tgt[i] - v) * a)).join(',') + ')';
   }
-
-  function squarify(items, x, y, w, h) {
-    const total = items.reduce((a, b) => a + b.value, 0), k = w * h / total;
-    const nodes = items.map(i => Object.assign({}, i, { area: i.value * k })), out = [];
-    let rect = { x, y, w, h }, row = [];
-    const sum = r => r.reduce((a, b) => a + b.area, 0);
-    const worst = (r, len) => { const s = sum(r), mx = Math.max(...r.map(z => z.area)), mn = Math.min(...r.map(z => z.area)); return Math.max(len * len * mx / (s * s), s * s / (len * len * mn)); };
-    const layout = r => {
-      const s = sum(r);
-      if (rect.w >= rect.h) { const cw = s / rect.h; let yy = rect.y; r.forEach(n => { const rh = n.area / cw; out.push(Object.assign(n, { x: rect.x, y: yy, w: cw, h: rh })); yy += rh; }); rect = { x: rect.x + cw, y: rect.y, w: rect.w - cw, h: rect.h }; }
-      else { const rh = s / rect.w; let xx = rect.x; r.forEach(n => { const rw = n.area / rh; out.push(Object.assign(n, { x: xx, y: rect.y, w: rw, h: rh })); xx += rw; }); rect = { x: rect.x, y: rect.y + rh, w: rect.w, h: rect.h - rh }; }
-    };
-    let i = 0;
-    while (i < nodes.length) {
-      const len = Math.max(1, Math.min(rect.w, rect.h)), nx = nodes[i];
-      if (!row.length || worst(row.concat([nx]), len) <= worst(row, len)) { row.push(nx); i++; } else { layout(row); row = []; }
-    }
-    if (row.length) layout(row);
-    return out;
+  // white text on dark tiles, dark text on light tiles (relative luminance)
+  function inkDark(rgb) {
+    const [r, g, b] = rgb.match(/\d+/g).map(v => { v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.32;
   }
 
-  function tileHtml(r, color, t1, t2, opts) {
-    const g = 1.5, x = r.x + g, y = r.y + g, w = Math.max(0, r.w - 2 * g), h = Math.max(0, r.h - 2 * g);
-    const small = w < 70 || h < 38, big = w > 140 && h > 80;
-    const bdg = opts.badge && w >= 110 ? '<span class="bdg">' + opts.badge + '</span>' : '';
-    const label = small ? '<span class="t1">' + esc(t1) + '</span>' + (h >= 26 ? '<span class="t2"><span>' + t2 + '</span></span>' : '') : '<span class="t1">' + esc(t1) + '</span><span class="t2"><span>' + t2 + '</span>' + bdg + '</span>';
-    return '<button class="tile ' + (big ? 'big ' : small ? 'small ' : '') + (opts.cls || '') + '" style="left:' + x.toFixed(1) + 'px;top:' + y.toFixed(1) + 'px;width:' + w.toFixed(1) + 'px;height:' + h.toFixed(1) + 'px;background:' + color + '" ' + opts.attr + ' title="' + esc(t1) + ' ' + fmtPct(opts.pct) + '">' + label + '</button>';
+  // One equal-size tile. Colour: 0% is the neutral colour; gains shade to green, losses to red, full colour at ±HEAT_SCALE%.
+  function flatTile(pct, name, o) {
+    const color = heatColor(pct), dk = inkDark(color);
+    return '<button class="tile ' + (dk ? 'ink-dark ' : '') + (o.cls || '') + '" style="background:' + color + ';color:' + (dk ? '#152030' : '#fff') + '" ' + o.attr +
+      ' title="' + esc(o.full || name) + ' ' + fmtPct(pct) + '"><span class="t0"><span class="t1">' + esc(name) + '</span>' + (o.badge ? '<span class="bdg">' + o.badge + '</span>' : '<span class="rk">' + o.rank + '</span>') + '</span>' +
+      '<span class="t2">' + fmtPct(pct) + '</span>' + (o.sub ? '<span class="t3">' + o.sub + '</span>' : '') + '</button>';
   }
 
   function waitingHtml() {
-    if (!isDemo() && S.liveErr) return '<div class="empty"><div class="err">Cannot reach ' + esc(S.endpointBase()) + '</div><p class="note">' + esc(S.liveErr) + '. Live mode calls a data server you run yourself. Browsers block hosted pages from reaching a local server, so open the downloaded app file on your own computer, or switch to Demo in Settings.</p></div>';
-    return '<div class="empty">Waiting for the first market snapshot…</div>';
+    if (!isDemo() && S.noData) return '<div class="empty">' + ico('inbox') + '<b>No market data for ' + esc(fmtDay(S.date)) + '</b><p>' + esc(S.liveErr) + '. Pick another day, or press Latest.</p></div>';
+    if (!isDemo() && S.liveErr) return '<div class="empty">' + ico('alert') + '<div class="err">Cannot reach ' + esc(S.endpointBase()) + '</div><p>' + esc(S.liveErr) + '. Live mode calls a data server you run yourself. Browsers block hosted pages from reaching a local server, so open the downloaded app file on your own computer, or switch to Demo in Settings.</p></div>';
+    return '<div class="empty"><div class="spin"></div><b>Waiting for the first market snapshot…</b></div>';
   }
 
+  const fmtDay = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : '';
   const todayIST = () => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+
+  // ---------- in-place DOM updates ----------
+  // morph(el, html) changes only what differs, so a refresh keeps focus, scroll, hover, open sections and half-typed input.
+  function morph(el, html) {
+    const tpl = document.createElement('template'); tpl.innerHTML = html;
+    patchChildren(el, tpl.content);
+  }
+  function patchChildren(a, b) {
+    const an = [...a.childNodes], bn = [...b.childNodes];
+    bn.forEach((n, i) => { if (i < an.length) patchNode(an[i], n); else a.appendChild(n); });
+    for (let i = bn.length; i < an.length; i++) an[i].remove();
+  }
+  function patchNode(a, b) {
+    if (a.nodeType !== b.nodeType || a.nodeName !== b.nodeName || (a.id || '') !== (b.id || '')) { a.replaceWith(b); return; }
+    if (a.nodeType !== 1) { if (a.nodeValue !== b.nodeValue) a.nodeValue = b.nodeValue; return; }
+    for (const at of [...a.attributes]) if (!b.hasAttribute(at.name)) a.removeAttribute(at.name);
+    for (const at of [...b.attributes]) if (a.getAttribute(at.name) !== at.value) a.setAttribute(at.name, at.value);
+    if (a.tagName === 'CANVAS') return;                          // keep what is drawn
+    if (a.tagName === 'DETAILS') a.open = b.hasAttribute('open');
+    if (a.tagName !== 'INPUT') patchChildren(a, b);
+    if (a === document.activeElement) return;                    // never fight the user's typing
+    if (a.tagName === 'INPUT') {
+      if (a.type === 'checkbox' || a.type === 'radio') a.checked = b.hasAttribute('checked');
+      else if (a.value !== (b.getAttribute('value') || '')) a.value = b.getAttribute('value') || '';
+    } else if (a.tagName === 'SELECT') {
+      const o = b.querySelector('option[selected]') || b.querySelector('option'); if (o && a.value !== o.value) a.value = o.value;
+    }
+  }
 
   // ---------- views ----------
   function renderHeat() {
     const m = $('#main');
-    if (!S.quotes.length) { m.innerHTML = waitingHtml(); return; }
+    if (!S.quotes.length) { morph(m, waitingHtml()); return; }
     const hq = baseQuotes();
     const secs = sectorStats(hq, S.cfg, baseSecs());
     if (S.sector && !secs.some(x => x.name === S.sector)) S.sector = null;      // sector from another data source
     const sc = S.scan, buyP = sc ? sc.buy.picked : [], sellP = sc ? sc.sell.picked : [];
     const pass = new Map();
     if (sc) { sc.buy.passed.forEach(x => pass.set(x.q.symbol, 'B')); sc.sell.passed.forEach(x => pass.set(x.q.symbol, 'S')); }
-    const crumbs = '<div class="crumbs"><button class="btn sm ' + (!S.sector ? 'on' : '') + '" data-act="allsec">All sectors</button>' +
-      (S.sector ? '<span class="muted">›</span><button class="btn sm on" data-act="noop">' + esc(S.sector) + '</button>' : '') +
-      '</div>';
-    m.innerHTML = crumbs + '<div class="heatbox" id="hb"></div>' +
-      '<div class="legend"><span>-' + HEAT_SCALE + '%</span><div class="bar"></div><span>+' + HEAT_SCALE + '%</span></div>' +
-      '<div class="picks" id="picks"></div><div id="secList"></div>';
-    const hb = $('#hb'), W = hb.clientWidth, H = hb.clientHeight; let html = '';
+    const crumbs = '<div class="toolbar"><nav class="crumbs" aria-label="Breadcrumb"><button class="crumb' + (!S.sector ? ' on' : '') + '" data-act="allsec">All sectors</button>' +
+      (S.sector ? '<span class="sep">/</span><span class="crumb on">' + esc(S.sector) + '</span>' : '') + '</nav>' +
+      '<div class="legend" aria-label="Colour scale"><span>−' + HEAT_SCALE + '%</span><div class="bar"></div><span>+' + HEAT_SCALE + '%</span></div></div>';
+    let html = '', secHtml = '';
+    HEAT = { n: rgbVar('--heat-n'), up: rgbVar('--heat-up'), down: rgbVar('--heat-down') };
     if (!S.sector) {
-      const items = secs.map(s => ({ value: Math.sqrt(s.weight), s })).sort((a, b) => b.value - a.value);
-      squarify(items, 0, 0, W, H).forEach(r => {
-        const bi = buyP.indexOf(r.s.name), si = sellP.indexOf(r.s.name);
-        const badge = bi >= 0 ? 'BUY ' + (bi + 1) : si >= 0 ? 'SELL ' + (si + 1) : '';
-        html += tileHtml(r, heatColor(r.s.avg), r.s.name, fmtPct(r.s.avg), { attr: 'data-sector="' + esc(r.s.name) + '"', badge, cls: bi >= 0 ? 'pickB' : si >= 0 ? 'pickS' : '', pct: r.s.avg });
+      [...secs].sort((a, b) => b.avg - a.avg).forEach((x, i) => {
+        const bi = buyP.indexOf(x.name), si = sellP.indexOf(x.name);
+        html += flatTile(x.avg, shortName(x.name), {
+          attr: 'data-sector="' + esc(x.name) + '"', full: x.name, rank: i + 1,
+          badge: bi >= 0 ? 'BUY ' + (bi + 1) : si >= 0 ? 'SELL ' + (si + 1) : '', cls: bi >= 0 ? 'pickB' : si >= 0 ? 'pickS' : '',
+          sub: x.adv != null ? '▲' + x.adv + ' ▼' + x.dec : '' });
       });
     } else {
-      const list = hq.filter(q => (q.sectors || [q.sector]).includes(S.sector));
-      const items = list.map(q => ({ value: Math.sqrt(q.weight || 1), q })).sort((a, b) => b.value - a.value);
-      if (items.length) squarify(items, 0, 0, W, H).forEach(r => {
-        const p = pass.get(r.q.symbol);
-        html += tileHtml(r, heatColor(r.q.chg), r.q.symbol, fmtPct(r.q.chg), { attr: 'data-sym="' + esc(r.q.symbol) + '"', badge: p === 'B' ? 'BUY' : p === 'S' ? 'SELL' : '', cls: p ? (p === 'B' ? 'pickB' : 'pickS') : '', pct: r.q.chg });
+      const list = hq.filter(q => (q.sectors || [q.sector]).includes(S.sector)).sort((a, b) => b.chg - a.chg);
+      list.forEach((q, i) => {
+        const p = pass.get(q.symbol);
+        html += flatTile(q.chg, q.symbol, { attr: 'data-sym="' + esc(q.symbol) + '"', rank: i + 1,
+          badge: p === 'B' ? 'BUY' : p === 'S' ? 'SELL' : '', cls: p ? (p === 'B' ? 'pickB' : 'pickS') : '', sub: fmtPx(q.ltp) });
       });
+      if (!list.length) html = '<div class="empty">' + ico('inbox') + '<b>No Nifty 200 stocks in this sector</b></div>';
     }
-    hb.innerHTML = html;
     if (!S.sector) {
-      const ranked = [...secs].sort((a, b) => b.avg - a.avg);
-      $('#secList').innerHTML = '<div class="seclist"><div class="hd"><b>All ' + ranked.length + ' sectors</b><span class="muted">' + (viewLock() ? 'at ' + S.cfg.scanTime : 'live') + (S.session && S.session !== todayIST() ? ' · session ' + S.session : '') + '</span></div>' +
-        ranked.map((x, i) => { const bi = buyP.indexOf(x.name), si = sellP.indexOf(x.name);
-          return '<button class="secrow" data-sector="' + esc(x.name) + '"><span class="muted num">' + (i + 1) + '</span><span class="nm">' + esc(x.name) + (x.custom ? ' <span class="tag">custom</span>' : '') + (x.value ? ' <span class="muted num">' + fmtPx(x.value) + '</span>' : '') + (x.adv != null ? ' <span class="num"><span class="up">▲' + x.adv + '</span> <span class="down">▼' + x.dec + '</span></span>' : '') + '</span><span class="muted">' + x.count + ' stocks</span>' +
-            (bi >= 0 ? '<span class="chip ok">Buy ' + (bi + 1) + '</span>' : si >= 0 ? '<span class="chip bad">Sell ' + (si + 1) + '</span>' : '<span></span>') + '<b class="num ' + cls(x.avg) + '">' + fmtPct(x.avg) + '</b></button>'; }).join('') + '</div>';
-    } else $('#secList').innerHTML = '';
+      const ranked = [...secs].sort((a, b) => b.avg - a.avg), maxAbs = Math.max(0.5, ...ranked.map(x => Math.abs(x.avg)));
+      secHtml = '<div class="seclist"><div class="hd"><b>All ' + ranked.length + ' sectors</b><span class="hint">' + (viewLock() ? 'At ' + esc(S.cfg.scanTime) : 'Live') + (S.session && S.session !== todayIST() ? ' · session ' + esc(S.session) : '') + '</span></div>' +
+        '<div class="secgrid sechead"><span>#</span><span>Sector</span><span class="r c-val">Value</span><span class="c-ad">Adv / Dec</span><span class="r c-n">Stocks</span><span>Pick</span><span class="r">Change</span></div>' +
+        ranked.map((x, i) => {
+          const bi = buyP.indexOf(x.name), si = sellP.indexOf(x.name), w = Math.min(50, Math.abs(x.avg) / maxAbs * 50);
+          return '<button class="secrow secgrid" data-sector="' + esc(x.name) + '"><span class="muted num">' + (i + 1) + '</span>' +
+            '<span class="nm"><span>' + esc(x.name) + '</span>' + (x.custom ? '<span class="ctag">custom</span>' : '') + '</span>' +
+            '<span class="r num muted c-val">' + (x.value ? fmtPx(x.value) : '—') + '</span>' +
+            '<span class="ad num c-ad">' + (x.adv != null ? '<span class="up">▲' + x.adv + '</span> <span class="down">▼' + x.dec + '</span>' : '') + '</span>' +
+            '<span class="r num muted c-n">' + x.count + '</span>' +
+            '<span>' + (bi >= 0 ? '<span class="chip ok">Buy ' + (bi + 1) + '</span>' : si >= 0 ? '<span class="chip bad">Sell ' + (si + 1) + '</span>' : '') + '</span>' +
+            '<span class="chg"><span class="dbar"><i class="' + (x.avg >= 0 ? 'pos' : 'neg') + '" style="width:' + w.toFixed(1) + '%"></i></span><b class="num ' + cls(x.avg) + '">' + fmtPct(x.avg) + '</b></span></button>';
+        }).join('') + '</div>';
+    }
     const chip = (n, side) => '<button class="chip ' + (side === 'b' ? 'ok' : 'bad') + '" data-sector="' + esc(n) + '">' + esc(n) + '</button>';
-    $('#picks').innerHTML = '<span class="muted">Buy sectors</span>' + (buyP.length ? buyP.map(n => chip(n, 'b')).join('') : '<span class="chip no">none</span>') +
-      '<span class="muted" style="margin-left:8px">Sell sectors</span>' + (sellP.length ? sellP.map(n => chip(n, 's')).join('') : '<span class="chip no">none</span>') +
-      '<div class="note" style="width:100%;margin-top:4px">' + (S.sector ? 'Outlined stocks passed all ' + nRules() + ' confirmations. Tap one to open its chart.' : 'Outlined sectors are the top ' + S.cfg.topSectors + ' per side. Tap a sector to drill into its stocks.') + '</div>';
+    const picksHtml = '<div class="pg"><span class="pl">Buy sectors</span>' + (buyP.length ? buyP.map(n => chip(n, 'b')).join('') : '<span class="chip no">none</span>') + '</div>' +
+      '<div class="pg"><span class="pl">Sell sectors</span>' + (sellP.length ? sellP.map(n => chip(n, 's')).join('') : '<span class="chip no">none</span>') + '</div>' +
+      '<p class="hint">' + (S.sector ? 'Outlined stocks passed all ' + nRules() + ' confirmations. Tap one to open its chart.' : 'Outlined sectors are the top ' + S.cfg.topSectors + ' per side. Tap a sector to drill into its stocks.') + '</p>';
+    morph(m, crumbs + '<div class="heatgrid' + (S.sector ? ' stocks' : '') + '" id="hb">' + html + '</div><div class="pickbar" id="picks">' + picksHtml + '</div><div id="secList">' + secHtml + '</div>');
   }
 
   function glyph(pd) {
@@ -527,33 +807,42 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
   function cardHtml(x) {
     const q = x.q, cur = S.qmap.get(q.symbol) || q, sign = x.side === 'buy' ? 1 : -1;
     const since = viewLock() ? (cur.ltp / q.ltp - 1) * 100 : null;
-    const ck = (ok, txt) => '<span class="chip ' + (ok ? 'ok' : 'bad') + '">' + (ok ? '✓' : '×') + ' ' + txt + '</span>';
-    return '<button class="card" data-sym="' + esc(q.symbol) + '"><div class="top"><div><span class="sym">' + esc(q.symbol) + '</span><span class="sec">' + esc(x.secName || q.sector) + '</span></div>' +
-      '<div class="px"><b>' + fmtPx(cur.ltp) + '</b><span class="' + cls(cur.chg) + '">' + fmtPct(cur.chg) + '</span></div></div>' +
-      '<div class="mid">' + glyph(q.prevDay) + '<div class="checks">' + ck(x.c1, 'Sector #' + x.secRank + ' · ' + fmtPct(q.chg) + ' move') + ck(x.c2, 'Nifty 200 #' + x.n200Rank) + ck(x.c3, S.cfg.wickMode === 'longer' ? (x.side === 'buy' ? 'Lower' : 'Upper') + ' wick ' + x.wickPct.toFixed(0) + '% ' + (x.c3 ? '>' : '≤') + ' ' + (x.side === 'buy' ? 'upper' : 'lower') + ' ' + x.oppPct.toFixed(0) + '%' : (x.side === 'buy' ? 'Lower' : 'Upper') + ' wick ' + x.wickPct.toFixed(0) + '%') + (S.cfg.firstCandle ? ck(x.c4, 'First 5-min ' + (x.f5Dir > 0 ? 'green' : x.f5Dir < 0 ? 'red' : x.q.first5 ? 'flat' : 'not formed')) : '') + '</div></div>' +
-      '<div class="foot"><span>' + (since === null ? (S.locked ? 'Live price' : 'Preview price') : (x.side === 'buy' ? 'Long' : 'Short') + ' since lock <span class="num ' + cls(since * sign) + '">' + fmtPct(since * sign) + '</span>') + '</span><span class="num">Prev L ' + fmtPx(q.prevDay.l) + ' · H ' + fmtPx(q.prevDay.h) + '</span></div></button>';
+    const ck = (ok, name, txt) => '<span class="ck ' + (ok ? 'ok' : 'bad') + '"><i>' + ico(ok ? 'check' : 'x') + '</i><em>' + name + '</em><span>' + txt + '</span></span>';
+    const lo = x.side === 'buy' ? 'Lower' : 'Upper', hiw = x.side === 'buy' ? 'upper' : 'lower';
+    const wickTxt = S.cfg.wickMode === 'longer' ? lo + ' ' + x.wickPct.toFixed(0) + '% ' + (x.c3 ? '>' : '≤') + ' ' + hiw + ' ' + x.oppPct.toFixed(0) + '%' : lo + ' wick ' + x.wickPct.toFixed(0) + '% of range';
+    return '<button class="card ' + x.side + '" data-sym="' + esc(q.symbol) + '">' +
+      '<span class="ch"><span><span class="sym">' + esc(q.symbol) + '</span><span class="sec">' + esc(x.secName || q.sector) + '</span></span>' +
+      '<span class="px"><span class="ltp">' + fmtPx(cur.ltp) + '</span><span class="chg ' + cls(cur.chg) + '">' + fmtPct(cur.chg) + '</span></span></span>' +
+      '<span class="cb"><span class="pdc">' + glyph(q.prevDay) + '<small>Prev day</small></span><span class="checks">' +
+      ck(x.c1, 'Sector', '#' + x.secRank + ' · ' + fmtPct(q.chg) + ' move') +
+      ck(x.c2, 'Nifty 200', 'Rank #' + x.n200Rank) +
+      ck(x.c3, 'Wick', wickTxt) +
+      (S.cfg.firstCandle ? ck(x.c4, 'First 5-min', x.f5Dir > 0 ? 'Green' : x.f5Dir < 0 ? 'Red' : x.q.first5 ? 'Flat' : 'Not formed yet') : '') +
+      '</span></span>' +
+      '<span class="cf"><span>' + (since === null ? (S.locked ? 'Live price' : 'Preview price') : (x.side === 'buy' ? 'Long' : 'Short') + ' since lock <span class="num ' + cls(since * sign) + '">' + fmtPct(since * sign) + '</span>') + '</span><span class="num">Prev L ' + fmtPx(q.prevDay.l) + ' · H ' + fmtPx(q.prevDay.h) + '</span></span></button>';
   }
 
   function renderShort() {
     const m = $('#main'), sc = S.scan;
-    if (!sc) { m.innerHTML = waitingHtml(); return; }
-    const res = sc[S.side], other = sc[S.side === 'buy' ? 'sell' : 'buy'];
+    if (!sc) { morph(m, waitingHtml()); return; }
+    const res = sc[S.side];
     const nb = sc.buy.passed.length, ns = sc.sell.passed.length;
     const chips = (arr, c) => arr.length ? arr.map(n => '<button class="chip ' + c + '" data-sector="' + esc(n) + '" data-goheat="1">' + esc(n) + '</button>').join('') : '<span class="chip no">none</span>';
-    const head = viewLock() ? ['Locked at ' + esc(S.cfg.scanTime), '· shortlist uses prices at scan time']
-      : S.locked ? ['Live prices', '· not the ' + esc(S.cfg.scanTime) + ' shortlist. Switch to @ ' + esc(S.cfg.scanTime) + ' at the top for that']
-      : ['Preview, not final', '· updates with live prices until ' + esc(S.cfg.scanTime)];
-    const banner = '<div class="banner"><div><b>' + head[0] + '</b> <span class="muted">' + head[1] + '</span></div>' +
-      '<div class="row"><span class="muted">Buy sectors</span>' + chips(sc.buy.picked, 'ok') + '</div><div class="row"><span class="muted">Sell sectors</span>' + chips(sc.sell.picked, 'bad') + '</div>' +
-      '</div>';
-    const seg = '<div class="seg" role="group" aria-label="Side" style="margin-bottom:12px"><button class="buy" data-side="buy" aria-pressed="' + (S.side === 'buy') + '">Buy · ' + nb + '</button><button class="sell" data-side="sell" aria-pressed="' + (S.side === 'sell') + '">Sell · ' + ns + '</button></div>';
-    const list = res.passed.length ? '<div class="cards">' + res.passed.map(cardHtml).join('') + '</div>' : '<div class="empty">No ' + S.side + ' stock passes all ' + nRules() + ' confirmations right now.<br><span class="note">Loosen a rule in Settings, or check the near misses below.</span></div>';
-    const near = res.near.length ? '<details id="nearD"' + (S.nearOpen ? ' open' : '') + '><summary>Near misses: ' + (nRules() - 1) + ' of ' + nRules() + ' confirmations (' + res.near.length + ')</summary><div class="cards">' + res.near.map(cardHtml).join('') + '</div></details>' : '';
-    m.innerHTML = banner + seg + list + near;
+    const dayTag = S.date ? ' · ' + esc(fmtDay(S.date)) : '';
+    const st = viewLock() ? ['locked', 'lock', 'Locked at ' + esc(S.cfg.scanTime) + dayTag, 'Shortlist uses prices at scan time.']
+      : S.locked ? ['live', 'pulse', (S.date ? 'Closing prices' + dayTag : 'Live prices'), 'Not the ' + esc(S.cfg.scanTime) + ' shortlist. Switch to @ ' + esc(S.cfg.scanTime) + ' at the top for that.']
+      : ['', 'clock', 'Preview, not final', 'Updates with live prices until ' + esc(S.cfg.scanTime) + '.'];
+    const banner = '<section class="summary ' + st[0] + '"><div class="st"><span class="sti">' + ico(st[1]) + '</span><div><b>' + st[2] + '</b><p>' + st[3] + '</p></div></div>' +
+      '<div class="sp"><div class="pg"><span class="pl">Buy sectors</span>' + chips(sc.buy.picked, 'ok') + '</div><div class="pg"><span class="pl">Sell sectors</span>' + chips(sc.sell.picked, 'bad') + '</div></div></section>';
+    const seg = '<div class="sidebar"><div class="seg lg" role="group" aria-label="Side"><button class="buy" data-side="buy" aria-pressed="' + (S.side === 'buy') + '">Buy <span class="cnt">' + nb + '</span></button><button class="sell" data-side="sell" aria-pressed="' + (S.side === 'sell') + '">Sell <span class="cnt">' + ns + '</span></button></div>' +
+      '<span class="hint">Passing all ' + nRules() + ' confirmations</span></div>';
+    const list = res.passed.length ? '<div class="cards">' + res.passed.map(cardHtml).join('') + '</div>' : '<div class="empty">' + ico('inbox') + '<b>No ' + S.side + ' stock passes all ' + nRules() + ' confirmations right now.</b><p>Loosen a rule in Settings, or check the near misses below.</p></div>';
+    const near = res.near.length ? '<details class="near" id="nearD"' + (S.nearOpen ? ' open' : '') + '><summary>' + ico('right') + '<span>Near misses</span><span class="hint">' + (nRules() - 1) + ' of ' + nRules() + ' confirmations</span><span class="badge">' + res.near.length + '</span></summary><div class="cards">' + res.near.map(cardHtml).join('') + '</div></details>' : '';
+    morph(m, banner + seg + list + near);
   }
 
   // ---------- charts ----------
-  const css = getComputedStyle(document.documentElement), col = n => css.getPropertyValue(n).trim();
+  const col = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
   function drawCandles(cv, c, o) {
     const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight; if (!W) return;
@@ -568,12 +857,12 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     (o.lines || []).forEach(l => { if (inr(l)) { lo = Math.min(lo, l.y); hi = Math.max(hi, l.y); } });
     const pv = (hi - lo) * 0.06 || 1; lo -= pv; hi += pv;
     const Y = v => padT + (hi - v) / (hi - lo) * ph, slots = o.slots || c.length, step = pw / slots, bw = Math.max(1.5, Math.min(step * 0.72, 14));
-    g.font = '11px "IBM Plex Mono",monospace'; g.lineWidth = 1;
+    g.font = '11px "JetBrains Mono",monospace'; g.lineWidth = 1;
     g.textAlign = 'left'; g.textBaseline = 'middle';
     for (let i = 0; i <= 4; i++) { const v = lo + (hi - lo) * i / 4, y = Math.round(Y(v)) + .5; g.strokeStyle = C.line; g.beginPath(); g.moveTo(padL, y); g.lineTo(W - padR, y); g.stroke(); g.fillStyle = C.muted; g.fillText(fmtPx(v), W - padR + 5, y); }
     g.textAlign = 'center'; g.textBaseline = 'top'; g.fillStyle = C.muted;
     (o.xlabels || []).forEach(a => { const first = a[0] === 0; g.textAlign = first ? 'left' : 'center'; g.fillText(a[1], first ? padL : padL + step * (a[0] + .5), H - padB + 5); });
-    if (o.hiIndex != null) { g.fillStyle = 'rgba(242,184,75,.13)'; g.fillRect(padL + step * o.hiIndex, padT, step, ph); }
+    if (o.hiIndex != null) { g.fillStyle = col('--accent-soft'); g.fillRect(padL + step * o.hiIndex, padT, step, ph); }
     let pinTop = 0, pinBot = 0;
     (o.lines || []).forEach(l => {
       if (!(l.y > 0)) return; g.fillStyle = l.color; g.textAlign = 'left';
@@ -590,7 +879,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     });
     const last = c[c.length - 1], ly = Y(last.c);
     g.fillStyle = C.accent; g.fillRect(W - padR + 1, ly - 8, padR - 2, 16);
-    g.fillStyle = '#1a1405'; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(fmtPx(last.c), W - padR + 4, ly);
+    g.fillStyle = col('--accent-ink'); g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(fmtPx(last.c), W - padR + 4, ly);
     cv._info = { c, padL, step, o };
   }
 
@@ -617,33 +906,36 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
       const st = S.bymap.get(sym); if (!st) return [];
       return tf === '5m' ? aggregate(st.m1, S.simMin, 5) : st.daily.slice(-30);
     }
-    const k = sym + '|' + tf, hit = S.cc[k], ttl = tf === '5m' ? Math.max(3, S.cfg.pollSec) * 1000 : 600000;
+    const k = sym + '|' + tf + '|' + (S.date || ''), hit = S.cc[k], ttl = tf === '5m' ? Math.max(3, S.cfg.pollSec) * 1000 : 600000;
     if (hit && Date.now() - hit.t < ttl) return hit.d;
-    const r = await fetch(S.endpointBase() + '/candles?symbol=' + encodeURIComponent(sym) + '&tf=' + tf, { cache: 'no-store' });
+    const r = await fetch(S.endpointBase() + '/candles?symbol=' + encodeURIComponent(sym) + '&tf=' + tf + dq('&'), { cache: 'no-store' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json(); S.cc[k] = { t: Date.now(), d }; return d;
   }
 
   function buildChartShell() {
     const syms = S.quotes.map(q => q.symbol).sort();
-    $('#main').innerHTML = '<div class="picker"><input id="symIn" list="symList" value="' + esc(S.sym || '') + '" aria-label="Symbol" autocomplete="off"><datalist id="symList">' + syms.map(s => '<option value="' + esc(s) + '">').join('') + '</datalist>' +
-      '<button class="btn sm" data-act="prev" aria-label="Previous symbol">‹</button><button class="btn sm" data-act="next" aria-label="Next symbol">›</button></div>' +
-      '<div class="picks" id="quick" style="margin:0 0 12px"></div><div id="chHead"></div>' +
-      '<div class="chartwrap"><div class="hd"><b>5-min · today</b><span class="muted" id="ic"></span></div><canvas id="cv5" aria-label="5 minute candles"></canvas><div class="readout" id="ro5"></div></div>' +
-      '<div class="chartwrap"><div class="hd"><b>Daily · last 30 sessions</b><span class="muted" id="dc"></span></div><canvas id="cv1d" class="short" aria-label="Daily candles"></canvas><div class="readout" id="ro1d"></div></div>';
+    $('#main').innerHTML = '<div class="ctool"><label class="search">' + ico('search') + '<input id="symIn" list="symList" value="' + esc(S.sym || '') + '" aria-label="Symbol" placeholder="Symbol" autocomplete="off"></label><datalist id="symList">' + syms.map(s => '<option value="' + esc(s) + '">').join('') + '</datalist>' +
+      '<button class="iconbtn" data-act="prev" aria-label="Previous symbol">' + ico('left') + '</button><button class="iconbtn" data-act="next" aria-label="Next symbol">' + ico('right') + '</button></div>' +
+      '<div class="quick" id="quick"></div><div id="chHead"></div>' +
+      '<div class="chartwrap"><div class="hd"><b id="t5">5-min · today</b><span class="hint" id="ic"></span></div><canvas id="cv5" aria-label="5 minute candles"></canvas><div class="readout" id="ro5"></div></div>' +
+      '<div class="chartwrap"><div class="hd"><b>Daily · last 30 sessions</b><span class="hint" id="dc"></span></div><canvas id="cv1d" class="short" aria-label="Daily candles"></canvas><div class="readout" id="ro1d"></div></div>';
     bindReadout($('#cv5'), $('#ro5')); bindReadout($('#cv1d'), $('#ro1d'));
     S.chartBuilt = true;
   }
 
   async function renderChart() {
-    if (!S.quotes.length) { $('#main').innerHTML = waitingHtml(); S.chartBuilt = false; return; }
+    if (!S.quotes.length) { morph($('#main'), waitingHtml()); S.chartBuilt = false; return; }
     if (!S.chartBuilt) buildChartShell();
-    const sym = S.sym, q = S.qmap.get(sym); if (!q) { $('#chHead').innerHTML = '<div class="empty">Pick a symbol from the list above.</div>'; return; }
+    const sym = S.sym, q = S.qmap.get(sym); if (!q) { morph($('#chHead'), '<div class="empty">' + ico('search') + '<b>Pick a symbol from the list above.</b></div>'); return; }
     const sc = S.scan, tag = sc && sc.buy.passed.some(x => x.q.symbol === sym) ? '<span class="chip ok">Shortlisted: buy</span>' : sc && sc.sell.passed.some(x => x.q.symbol === sym) ? '<span class="chip bad">Shortlisted: sell</span>' : '<span class="chip no">Not shortlisted</span>';
     const w = wickInfo(q.prevDay);
-    $('#chHead').innerHTML = '<div class="row"><b style="font-size:20px">' + esc(sym) + '</b><span class="muted">' + esc((q.sectors || [q.sector]).join(' · ')) + '</span>' + tag + '</div><div class="statline"><span>LTP<b class="' + cls(q.chg) + '">' + fmtPx(q.ltp) + ' ' + fmtPct(q.chg) + '</b></span><span>O<b>' + fmtPx(q.open) + '</b></span><span>H<b>' + fmtPx(q.high) + '</b></span><span>L<b>' + fmtPx(q.low) + '</b></span><span>Prev wick<b>lower ' + w.lowerPct.toFixed(0) + '% · upper ' + w.upperPct.toFixed(0) + '%</b></span></div>';
+    const stat = (k, v, extra) => '<div class="stat"><span>' + k + '</span><b>' + v + '</b>' + (extra || '') + '</div>';
+    morph($('#chHead'), '<section class="qhead"><div class="qt"><div><div class="qsym">' + esc(sym) + '</div><div class="sec">' + esc((q.sectors || [q.sector]).join(' · ')) + '</div></div>' + tag + '</div><div class="stats">' +
+      stat('LTP', '<span class="' + cls(q.chg) + '">' + fmtPx(q.ltp) + '</span>', '<em class="' + cls(q.chg) + '">' + fmtPct(q.chg) + '</em>') + stat('Open', fmtPx(q.open)) + stat('High', fmtPx(q.high)) + stat('Low', fmtPx(q.low)) +
+      stat('Prev-day wick', '↓' + w.lowerPct.toFixed(0) + '% · ↑' + w.upperPct.toFixed(0) + '%', '<em class="muted">lower · upper</em>') + '</div></section>');
     const quick = (arr, c) => arr.map(x => '<button class="chip ' + c + '" data-sym="' + esc(x.q.symbol) + '">' + esc(x.q.symbol) + '</button>').join('');
-    $('#quick').innerHTML = sc ? ((sc.buy.passed.length ? '<span class="muted">Buy</span>' + quick(sc.buy.passed, 'ok') : '') + (sc.sell.passed.length ? '<span class="muted" style="margin-left:6px">Sell</span>' + quick(sc.sell.passed, 'bad') : '')) : '';
+    morph($('#quick'), sc ? ((sc.buy.passed.length ? '<span class="pl">Buy</span>' + quick(sc.buy.passed, 'ok') : '') + (sc.sell.passed.length ? '<span class="pl">Sell</span>' + quick(sc.sell.passed, 'bad') : '')) : '');
     try {
       const [intr, daily] = await Promise.all([getCandles(sym, '5m'), getCandles(sym, '1d')]);
       if (sym !== S.sym || S.tab !== 'chart') return;
@@ -652,6 +944,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
       const xl = []; for (let i = 0; i < slots; i += every) xl.push([i, fmtClock(OPEN_MIN + i * 5)]);
       drawCandles($('#cv5'), intr, { slots, xlabels: xl, labelOf: i => fmtClock(OPEN_MIN + i * 5), vIndex: sm / 5, vLabel: S.cfg.scanTime + ' scan', hiIndex: null, lines: [
         { y: q.prevClose, label: 'Prev close', color: col('--muted'), dash: [5, 4] }, { y: pd.h, label: 'Prev day high', color: col('--accent'), dash: [1, 4] }, { y: pd.l, label: 'Prev day low', color: col('--accent'), dash: [1, 4] }] });
+      $('#t5').textContent = '5-min · ' + (S.date ? fmtDay(S.date) : 'today');
       $('#ic').textContent = intr.length ? intr.length + ' candles · ' + fmtClock(OPEN_MIN + Math.min(nowMin(), SESSION_MIN)) : '';
       let dates = isDemo() ? tradingDates(daily.length) : daily.map(d => new Date(d.t));
       const dl = []; for (let i = 0; i < daily.length; i += 6) dl.push([i, dFmt(dates[i])]);
@@ -661,49 +954,75 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
   }
 
   // ---------- settings ----------
+  const GROUPS = [
+    ['c1', 'Confirmation 1', 'Sector strength'], ['c2', 'Confirmation 2', 'Nifty 200 rank'], ['c3', 'Confirmation 3', 'Previous-day wick'],
+    ['c4', 'Confirmation 4', 'First 5-min candle'], ['scan', 'Scan', 'When the shortlist locks'], ['data', 'Data', 'Where prices come from'], ['look', 'Appearance', 'Theme']
+  ];
   const FIELDS = [
-    { k: 'maxMovePct', t: 'number', step: 0.5, min: 0.5, label: 'Max move for a stock (%)', hint: 'Confirmation 1. Skip stocks that already moved more than this by the scan time.' },
-    { k: 'minMovePct', t: 'number', step: 0.1, min: 0, label: 'Min move for a stock (%)', hint: 'Optional floor so flat stocks do not qualify. 0 turns it off.' },
-    { k: 'topSectors', t: 'number', step: 1, min: 1, max: 10, label: 'Top sectors per side', hint: 'Confirmation 1. Strongest sectors for buys, weakest for sells.' },
-    { k: 'n200TopK', t: 'number', step: 1, min: 1, max: 200, label: 'Nifty 200 rank cut-off', hint: 'Confirmation 2. Stock must be inside the top N gainers (buy) or losers (sell).' },
-    { k: 'wickMode', t: 'select', label: 'Previous-day wick rule', opts: [['pct', 'Longer wick AND at least the % of range below'], ['longer', 'Longer wick only (ignore % of range)']], hint: 'Confirmation 3. Buy: lower wick > upper wick. Sell: upper wick > lower wick.' },
-    { k: 'wickPct', t: 'number', step: 5, min: 5, max: 95, label: 'Previous-day wick (% of range)', hint: 'Used only with the first wick rule. Lower wick for buys, upper wick for sells.' },
-    { k: 'firstCandle', t: 'checkbox', label: 'Confirmation 4: first 5-min candle (09:15-09:20) green for buys, red for sells' },
-    { k: 'scanTime', t: 'time', label: 'Scan time (IST)', hint: 'Shortlist locks at this time.' },
-    { k: 'autoScan', t: 'checkbox', label: 'Lock the shortlist automatically at scan time' },
-    { k: 'weighting', t: 'select', label: 'Sector average', opts: [['cap', 'Weighted by market size'], ['equal', 'Equal weight']] },
-    { k: 'mode', t: 'select', label: 'Data source', opts: [['demo', 'Demo market (simulated)'], ['live', 'Live endpoint']] }
+    { g: 'c1', k: 'topSectors', t: 'number', step: 1, min: 1, max: 10, label: 'Top sectors per side', hint: 'Strongest sectors for buys, weakest for sells.' },
+    { g: 'c1', k: 'maxMovePct', t: 'number', step: 0.5, min: 0.5, label: 'Max move for a stock (%)', hint: 'Skip stocks that already moved more than this by the scan time.' },
+    { g: 'c1', k: 'minMovePct', t: 'number', step: 0.1, min: 0, label: 'Min move for a stock (%)', hint: 'Optional floor so flat stocks do not qualify. 0 turns it off.' },
+    { g: 'c1', k: 'weighting', t: 'select', label: 'Average for custom sectors', opts: [['cap', 'Weighted by market size'], ['equal', 'Equal weight']] },
+    { g: 'c2', k: 'n200TopK', t: 'number', step: 1, min: 1, max: 200, label: 'Nifty 200 rank cut-off', hint: 'Stock must be inside the top N gainers (buy) or losers (sell).' },
+    { g: 'c3', k: 'wickMode', t: 'select', label: 'Wick rule', opts: [['pct', 'Longer wick AND at least the % of range below'], ['longer', 'Longer wick only (ignore % of range)']], hint: 'Buy: lower wick > upper wick. Sell: upper wick > lower wick.' },
+    { g: 'c3', k: 'wickPct', t: 'number', step: 5, min: 5, max: 95, label: 'Wick size (% of the day’s range)', hint: 'Used only with the first wick rule.' },
+    { g: 'c4', k: 'firstCandle', t: 'checkbox', label: 'Require the first 5-min candle', hint: 'The 09:15–09:20 candle must be green for buys and red for sells.' },
+    { g: 'scan', k: 'scanTime', t: 'time', label: 'Scan time (IST)', hint: 'Shortlist locks at this time.' },
+    { g: 'scan', k: 'autoScan', t: 'checkbox', label: 'Lock the shortlist automatically', hint: 'Takes the snapshot as soon as the market reaches the scan time.' },
+    { g: 'look', k: 'theme', t: 'theme' },
+    { g: 'data', k: 'mode', t: 'select', label: 'Data source', opts: [['demo', 'Demo market (simulated)'], ['live', 'Live endpoint']] }
   ];
   const LIVE_FIELDS = [
-    { k: 'endpoint', t: 'text', label: 'Live endpoint URL', hint: 'Serves /snapshot and /candles. See the data format below.' },
-    { k: 'pollSec', t: 'number', step: 1, min: 2, label: 'Refresh every (seconds)' }
+    { g: 'data', k: 'endpoint', t: 'text', label: 'Live endpoint URL', hint: 'Serves /snapshot and /candles. See the data format below.' },
+    { g: 'data', k: 'pollSec', t: 'number', step: 1, min: 2, label: 'Refresh every (seconds)' }
   ];
 
+  const THEMES = [
+    ['slate', 'Slate', 'Soft blue-grey with amber', ['#1a212c', '#323c4b', '#f5b84a', '#3ccf95', '#f6767f']],
+    ['daylight', 'Daylight', 'Bright and crisp, indigo accent', ['#f2f5f9', '#ffffff', '#4f5bd5', '#0e9a62', '#d6384a']],
+    ['sand', 'Sand', 'Warm paper, teal accent', ['#f5efe4', '#fffcf6', '#0e8585', '#2a8a55', '#c0433b']],
+    ['ocean', 'Ocean', 'Deep blue with aqua accent', ['#152a42', '#2c4869', '#5ad6c8', '#45df9d', '#ff8089']]
+  ];
+  function applyTheme() {
+    const t = THEMES.some(x => x[0] === S.cfg.theme) ? S.cfg.theme : 'slate';
+    document.documentElement.dataset.theme = t;
+    let m = document.querySelector('meta[name=theme-color]'); if (!m) { m = document.createElement('meta'); m.name = 'theme-color'; document.head.appendChild(m); }
+    m.content = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  }
   function fieldHtml(f) {
     const v = S.cfg[f.k], id = 'f_' + f.k;
-    if (f.t === 'checkbox') return '<div class="field chk"><input type="checkbox" id="' + id + '" data-k="' + f.k + '"' + (v ? ' checked' : '') + '><label for="' + id + '">' + f.label + '</label></div>';
+    if (f.t === 'theme') return '<div class="themes" role="radiogroup" aria-label="Theme">' + THEMES.map(th => '<label class="swatch"><input type="radio" name="theme" data-k="theme" value="' + th[0] + '"' + ((v || 'slate') === th[0] ? ' checked' : '') + '>' +
+      '<span class="sw">' + th[3].map(c => '<i style="background:' + c + '"></i>').join('') + '</span><span><b>' + th[1] + '</b><small>' + th[2] + '</small></span></label>').join('') + '</div>';
+    const dim = f.k === 'wickPct' && S.cfg.wickMode === 'longer';
+    if (f.t === 'checkbox') return '<label class="switch" for="' + id + '"><input type="checkbox" id="' + id + '" data-k="' + f.k + '"' + (v ? ' checked' : '') + '><span class="track"></span><span class="lbl">' + f.label + (f.hint ? '<small>' + f.hint + '</small>' : '') + '</span></label>';
     let inp;
     if (f.t === 'select') inp = '<select id="' + id + '" data-k="' + f.k + '">' + f.opts.map(o => '<option value="' + o[0] + '"' + (v === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select>';
     else inp = '<input id="' + id + '" data-k="' + f.k + '" type="' + f.t + '" value="' + esc(v) + '"' + (f.step ? ' step="' + f.step + '"' : '') + (f.min != null ? ' min="' + f.min + '"' : '') + (f.max != null ? ' max="' + f.max + '"' : '') + '>';
-    return '<div class="field"><label for="' + id + '">' + f.label + '</label>' + inp + (f.hint ? '<small>' + f.hint + '</small>' : '') + '</div>';
+    return '<div class="field' + (dim ? ' dim' : '') + '"><label for="' + id + '">' + f.label + '</label>' + inp + (f.hint ? '<small>' + f.hint + '</small>' : '') + '</div>';
   }
 
   function renderSettings() {
-    const live = S.cfg.mode === 'live';
-    $('#main').innerHTML = '<div class="form">' + FIELDS.map(fieldHtml).join('') + (live ? LIVE_FIELDS.map(fieldHtml).join('') : '') +
-      '<div class="row"><button class="btn" data-act="reset">Reset to defaults</button></div>' +
-      '<div class="note"><b>Live data format.</b> <span class="num">GET /snapshot</span> returns <span class="num">{ "time": ISO-8601, "stocks": [ { symbol, sector, weight, ltp, prevClose, open, high, low, prevDay: {o,h,l,c}, first5: {o,h,l,c} or null } ] }</span>. Optional <span class="num">/snapshot?at=09:20</span> returns the same shape as of that time, so a reload after 9:20 still locks the true 9:20 prices. <span class="num">GET /candles?symbol=X&amp;tf=5m|1d</span> returns <span class="num">[ {t,o,h,l,c} ]</span>. Browsers only allow this when the app file is opened on your own machine.</div>' +
-      '<div class="note">Changes apply instantly and re-run the scan on the locked prices.</div></div>';
+    const all = FIELDS.concat(S.cfg.mode === 'live' ? LIVE_FIELDS : []);
+    morph($('#main'), '<div class="settings">' + GROUPS.map(gp => '<section class="sgroup"><header><span class="eyebrow">' + gp[1] + '</span><h3>' + gp[2] + '</h3></header><div class="sfields">' + all.filter(f => f.g === gp[0]).map(fieldHtml).join('') + '</div></section>').join('') +
+      '<div class="sactions"><button class="btn" data-act="reset">Reset to defaults</button><span class="hint">Changes apply instantly to every tab.</span></div>' +
+      '<details class="dev"><summary>Live data format (for your own data server)</summary><div class="note"><span class="num">GET /snapshot</span> returns <span class="num">{ "time": ISO-8601, "stocks": [ { symbol, sector, weight, ltp, prevClose, open, high, low, prevDay: {o,h,l,c}, first5: {o,h,l,c} or null } ] }</span>. Optional <span class="num">/snapshot?at=09:20</span> returns the same shape as of that time, so a reload after 9:20 still locks the true 9:20 prices. <span class="num">GET /candles?symbol=X&amp;tf=5m|1d</span> returns <span class="num">[ {t,o,h,l,c} ]</span>. Browsers only allow this when the app file is opened on your own machine.</div></details></div>');
   }
 
   // ---------- render ----------
   function render(force) {
     $('#clock').textContent = fmtClock(OPEN_MIN + Math.max(0, nowMin()));
-    const st = $('#status'); st.className = 'pill ' + (S.locked ? 'lock' : 'wait'); st.textContent = S.locked ? 'Locked ' + S.cfg.scanTime : 'Scan at ' + S.cfg.scanTime;
-    $('#viewSeg').innerHTML = '<button data-view="live" aria-pressed="' + !viewLock() + '">Live</button><button data-view="lock" aria-pressed="' + viewLock() + '"' +
-      (S.locked && S.snap ? '' : ' disabled title="Available once the market reaches ' + esc(S.cfg.scanTime) + '"') + '>@ ' + esc(S.cfg.scanTime) + '</button>';
-    const sc = S.scan; $('#shortCount').textContent = sc ? '(' + (sc.buy.passed.length + sc.sell.passed.length) + ')' : '';
-    if (S.tab === 'set') { if (force && !($('#main').contains(document.activeElement) && document.activeElement.matches('input[type=text],input[type=number]'))) renderSettings(); return; }
+    const st = $('#status'); st.className = 'pill ' + (S.locked ? 'lock' : 'wait'); morph(st, ico(S.locked ? 'lock' : 'clock') + '<span>' + (S.locked ? 'Locked ' : 'Scan at ') + esc(S.cfg.scanTime) + '</span>');
+    const box = $('#dateBox'), din = $('#dateIn'), dates = S.sessions ? S.sessions.dates : [];
+    box.hidden = isDemo();
+    if (document.activeElement !== din) din.value = S.date || (S.sessions && S.sessions.default) || S.session || '';
+    if (dates.length) { din.min = dates[dates.length - 1]; din.max = dates[0]; }
+    din.closest('.datepick').classList.toggle('past', !!S.date);
+    $('#latestBtn').hidden = !S.date;
+    $('#sessionLbl').textContent = S.dateMsg ? S.dateMsg : !isDemo() && S.session && S.session !== todayIST() ? 'Session ' + new Date(S.session + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : isDemo() ? 'Demo clock' : 'IST';
+    morph($('#viewSeg'), '<button data-view="live" aria-pressed="' + !viewLock() + '">Live</button><button data-view="lock" aria-pressed="' + viewLock() + '"' +
+      (S.locked && S.snap ? '' : ' disabled title="Available once the market reaches ' + esc(S.cfg.scanTime) + '"') + '>@ ' + esc(S.cfg.scanTime) + '</button>');
+    const sc = S.scan, sb = $('#shortCount'); sb.textContent = sc ? sc.buy.passed.length + sc.sell.passed.length : ''; sb.hidden = !sc;
+    if (S.tab === 'set') { renderSettings(); return; }
     ({ heat: renderHeat, short: renderShort, chart: renderChart })[S.tab]();
   }
 
@@ -726,12 +1045,24 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     const act = e.target.closest('[data-act]'); if (!act) return;
     const a = act.dataset.act;
     if (a === 'allsec') { S.sector = null; render(); }
+    else if (a === 'latest') setDate(null);
     else if (a === 'prev' || a === 'next') { const syms = S.quotes.map(q => q.symbol).sort(), i = syms.indexOf(S.sym), n = syms.length; if (n) { S.sym = syms[(i + (a === 'next' ? 1 : -1) + n) % n]; $('#symIn').value = S.sym; render(); } }
     else if (a === 'reset') { S.cfg = defaults(); saveCfg(); restartLoops(); }
   });
   document.addEventListener('toggle', e => { if (e.target.id === 'nearD') S.nearOpen = e.target.open; }, true);
   document.addEventListener('change', e => {
     const t = e.target;
+    if (t.id === 'dateIn') {
+      const want = t.value, dates = S.sessions ? S.sessions.dates : [];
+      if (!want) { setDate(null); return; }
+      let pick = want;
+      if (dates.length && !dates.includes(want)) {
+        pick = dates.find(x => x < want) || dates[dates.length - 1];
+        S.dateMsg = 'No trading on ' + new Date(want + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ', showing ' + new Date(pick + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        clearTimeout(S.dateMsgT); S.dateMsgT = setTimeout(() => { S.dateMsg = null; render(); }, 5000);
+      }
+      t.value = pick; t.blur(); setDate(pick); return;
+    }
     if (t.id === 'symIn') { const v = t.value.trim().toUpperCase(); if (S.qmap.has(v)) { S.sym = v; render(); } return; }
     const k = t.dataset.k; if (!k) return;
     let v = t.type === 'checkbox' ? t.checked : t.type === 'number' ? parseFloat(t.value) : t.value;
@@ -742,6 +1073,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
   // One place that reacts to settings, whether they changed here or in another window of the app.
   function applyCfgChange(keys) {
     const has = k => keys.includes(k);
+    if (has('theme')) applyTheme();
     if (has('mode') || has('endpoint') || has('pollSec')) { restartLoops(); return; }
     if (has('scanTime') || has('autoScan')) clearLock();          // the old snapshot belongs to the old scan time
     update(); render(true);
@@ -760,6 +1092,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
   let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { S.chartBuilt = S.tab === 'chart' ? S.chartBuilt : false; render(); }, 150); });
 
   // ---------- start ----------
+  applyTheme();
   newMarket(7);
   restartLoops();
 })();
