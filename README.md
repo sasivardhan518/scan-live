@@ -3,10 +3,15 @@
 Needs Python 3.9+. From this folder:
 
     pip install -r requirements.txt
-    python server.py --provider yahoo          # free, no account
+    python server.py --provider auto           # Fyers when logged in, Yahoo otherwise (recommended)
+    python server.py --provider yahoo          # Yahoo only: free, no account
     # then open http://localhost:8787/
 
 ## Providers
+- `auto`   Fyers when you are logged in, Yahoo until then. Needs `fyers.json` (setup below); without it, runs on Yahoo only.
+           Both load side by side. Each request goes to Fyers once it is logged in and its data has loaded (about a minute
+           after login); before that, or for a minute after any Fyers error, Yahoo answers. The header shows
+           LIVE · FYERS or LIVE · YAHOO, and a **Log in to Fyers** button while Fyers is not logged in.
 - `fyers`  Fyers API v3 (real-time, free with a Fyers account). Recommended. Setup below.
 - `yahoo`  Free. NSE data on Yahoo can be delayed, so compare it with your broker screen before trusting a 9:20 scan.
 - `kite`   Zerodha Kite Connect (real-time). Set `KITE_API_KEY` and `KITE_ACCESS_TOKEN` (the token expires daily), then
@@ -22,7 +27,7 @@ Needs Python 3.9+. From this folder:
        {"app_id": "XXXXXXXX-100", "secret_key": "YOUR_SECRET_ID"}
 
    or set the environment variables `FYERS_APP_ID` and `FYERS_SECRET_KEY` instead.
-3. `python server.py --provider fyers`, open http://localhost:8787/ and press **Log in to Fyers**. You sign in on Fyers'
+3. `python server.py --provider auto` (or `--provider fyers` for Fyers only), open http://localhost:8787/ and press **Log in to Fyers**. You sign in on Fyers'
    own page and come straight back. Do this once each trading day (Fyers tokens last one day; the token is saved in the
    git-ignored `fyers_token.json`, so a restart the same day needs no new login).
 

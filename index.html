@@ -92,7 +92,8 @@ header{order:0;display:flex;align-items:center;gap:14px;padding:12px 20px;flex-w
 .datepick input{background:none;border:0;outline:none;color:var(--text);font:500 12.5px var(--mono);color-scheme:inherit;cursor:pointer}
 .datepick.past{border-color:var(--accent);background:var(--accent-soft)}
 .datepick.past svg{color:var(--accent)}
-#latestBtn[hidden],.dgroup[hidden]{display:none}
+#latestBtn[hidden],.dgroup[hidden],#fyLogin[hidden]{display:none}
+#fyLogin{text-decoration:none;color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
 .hlabel{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
 .clockbox{display:flex;flex-direction:column;align-items:flex-end;line-height:1.1}
 .clock{font:600 20px/1 var(--mono);letter-spacing:-.02em}
@@ -347,6 +348,7 @@ details.dev summary{cursor:pointer;padding:6px 0}
 <div id="app">
   <header>
     <div class="brand"><span class="logo">9:20</span><div class="bt"><b>Sector Scanner</b><span class="tag" id="modeTag">DEMO</span></div></div>
+    <a class="btn sm" id="fyLogin" hidden>Log in to Fyers</a>
     <div class="spacer"></div>
     <div class="dgroup" id="dateBox"><label class="datepick" title="Trading day to show"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><input type="date" id="dateIn" aria-label="Trading day"></label><button class="btn sm" id="latestBtn" data-act="latest" hidden>Latest</button></div>
     <div class="hgroup"><span class="hlabel">Prices</span><span class="seg" id="viewSeg" role="group" aria-label="Prices shown on every tab"></span></div>
@@ -641,6 +643,9 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
       if (S.sessions && d.session && !S.date && d.session !== S.sessions.default) loadSessions();   // a new trading day started
       if (d.session && S.session && d.session !== S.session) { clearLock(); S.cc = {}; }
       S.session = d.session || null;
+      // --provider auto: which source answered (fyers / yahoo), and why it is not Fyers
+      if (S.source && d.source && d.source !== S.source) { S.cc = {}; resetEma(); }     // switched source: drop data from the other one
+      S.source = d.source || null; S.fyersLogin = d.fyersLogin ? S.endpointBase() + d.fyersLogin : null; S.fyersNote = d.fyersNote || null;
       S.quotes = normLive(d.stocks); S.secLive = d.sectors || null;
       const t = Date.parse(d.dataTime || d.time);
       const istMin = Math.floor(((isNaN(t) ? Date.now() : t) / 60000 + 330)) % 1440;
@@ -945,6 +950,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
       (S.cfg.emaGreen ? '<span class="chip">' + (buy ? 'Green' : 'Red') + ' signal candle</span>' : '') + '</div>';
     const banner = '<section class="summary live"><div class="st"><span class="sti">' + ico('pulse') + '</span><div><b>' + (buy ? 'Buy' : 'Sell') + ' setups · 20 EMA · 5-min' + dayTag + '</b><p>' +
       (d.lastCandle ? 'Last closed candle ' + hm(d.lastCandle) + (d.past ? ' · session closed' : ' · rescans every few seconds') : 'No closed 5-minute candle yet') +
+      (d.source ? ' · data: ' + (d.source === 'fyers' ? 'Fyers (exact NSE candles)' : 'Yahoo' + (d.fyersNote ? ' — ' + esc(d.fyersNote) : '')) : '') +
       (d.error ? ' · <span class="err">' + esc(d.error) + ' (showing the last good data)</span>' : '') +
       (d.oldServer ? '<br><span class="err">The data server is an older version that finds buy setups only. Stop it (Ctrl+C) and start server.py again to get sell setups.</span>' : '') +
       '</p></div></div><div class="sp">' + rules + '</div></section>';
@@ -1155,6 +1161,10 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
   // ---------- render ----------
   function render(force) {
     $('#clock').textContent = fmtClock(OPEN_MIN + Math.max(0, nowMin()));
+    const tag = $('#modeTag'), fy = $('#fyLogin'), src = !isDemo() && S.source ? S.source.toUpperCase() : '';
+    tag.textContent = isDemo() ? 'DEMO' : 'LIVE' + (src ? ' · ' + src : '');
+    tag.title = S.fyersNote ? 'Using Yahoo: ' + S.fyersNote : src ? 'Data from ' + S.source : '';
+    fy.hidden = isDemo() || !S.fyersLogin; if (S.fyersLogin) fy.href = S.fyersLogin;
     const st = $('#status'); st.className = 'pill ' + (S.locked ? 'lock' : 'wait'); morph(st, ico(S.locked ? 'lock' : 'clock') + '<span>' + (S.locked ? 'Locked ' : 'Scan at ') + esc(S.cfg.scanTime) + '</span>');
     const box = $('#dateBox'), din = $('#dateIn'), dates = S.sessions ? S.sessions.dates : [];
     box.hidden = isDemo();

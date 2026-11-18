@@ -12,6 +12,7 @@ Serves the scanner app and the data it needs:
 
 Providers:  mock (synthetic, for testing)  |  yahoo (free, no account)  |  kite (Zerodha Kite Connect)
             fyers (Fyers API v3, real-time and free with an account; log in daily at /fyers/login)
+            auto  (Fyers when logged in, Yahoo until then or if Fyers fails)
 """
 import argparse, datetime as dt, json, math, os, random, sys, threading, time, zlib
 from ema_setup import ema, buy_setups, sell_setups
@@ -392,6 +393,17 @@ class Loading(Exception):
 
 FYERS_API = "https://api-t1.fyers.in/api/v3"
 FYERS_DATA = "https://api-t1.fyers.in/data"
+# Fyers sits behind Cloudflare, which refuses Python's default User-Agent ("error code: 1010"), so name the client.
+FYERS_HEADERS = {"User-Agent": "Mozilla/5.0 (scan-live scanner)", "Accept": "application/json"}
+
+
+def fyers_json(status, body):
+    """Parse a Fyers reply; a non-JSON reply (a block page, an outage) becomes a readable error."""
+    try:
+        return json.loads(body or b"{}")
+    except ValueError:
+        text = body[:200].decode(errors="replace").strip()
+        raise RuntimeError(f"Fyers sent a non-JSON reply (HTTP {status}): {text or 'empty'}")
 
 
 class FyersProvider:
@@ -425,6 +437,12 @@ class FyersProvider:
             pass
         self.state = secrets.token_urlsafe(16)
         self.calls, self.rl = collections.deque(), threading.Lock()
+        self.cool_until, self.partial = 0.0, {}                   # rate-limit pause; daily downloads in progress
+        self.per_min = 150                                         # our own pace; lowered after any rate-limit reply
+
+    def cooling(self):
+        """True during a rate-limit pause (every Fyers call would wait for it to end)."""
+        return time.time() < self.cool_until
         self.qcache, self.qlock = {}, threading.Lock()
         self.sd, self.sd_at = None, 0.0
 
@@ -443,11 +461,11 @@ class FyersProvider:
             raise ValueError("login state did not match; start again from /fyers/login")
         body = json.dumps({"grant_type": "authorization_code", "code": auth_code,
                            "appIdHash": hashlib.sha256(f"{self.app_id}:{self.secret}".encode()).hexdigest()}).encode()
-        req = urllib.request.Request(FYERS_API + "/validate-authcode", data=body, headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(FYERS_API + "/validate-authcode", data=body, headers=dict(FYERS_HEADERS, **{"Content-Type": "application/json"}))
         try:
-            d = json.loads(urllib.request.urlopen(req, timeout=20).read())
+            d = fyers_json(200, urllib.request.urlopen(req, timeout=20).read())
         except urllib.error.HTTPError as e:
-            d = json.loads(e.read() or b"{}")
+            d = fyers_json(e.code, e.read())
         if d.get("s") != "ok" or not d.get("access_token"):
             raise RuntimeError(d.get("message") or "Fyers did not return an access token")
         self.token = d["access_token"]
@@ -460,13 +478,17 @@ class FyersProvider:
 
     # ---- REST ----
     def _wait(self):
-        """Stay under Fyers' limits: 10 calls a second and 200 a minute."""
+        """Stay well under Fyers' limits (10 calls a second, 200 a minute; repeated breaches can block the account for
+        the day): at most 5 a second and 150 a minute, and nothing at all while a rate-limit pause is running."""
         with self.rl:
             while True:
                 t = time.time()
+                if t < self.cool_until:
+                    time.sleep(min(1.0, self.cool_until - t))
+                    continue
                 while self.calls and t - self.calls[0] > 60:
                     self.calls.popleft()
-                if len(self.calls) < 185 and sum(1 for c in self.calls if t - c < 1) < 9:
+                if len(self.calls) < self.per_min and sum(1 for c in self.calls if t - c < 1) < 5:
                     self.calls.append(t)
                     return
                 time.sleep(0.05)
@@ -479,7 +501,7 @@ class FyersProvider:
         url = FYERS_DATA + path + "?" + urlencode(params)
         for attempt in range(4):
             self._wait()
-            req = urllib.request.Request(url, headers={"Authorization": f"{self.app_id}:{self.token}", "version": "3"})
+            req = urllib.request.Request(url, headers=dict(FYERS_HEADERS, Authorization=f"{self.app_id}:{self.token}", version="3"))
             try:
                 status, body = 200, urllib.request.urlopen(req, timeout=20).read()
             except urllib.error.HTTPError as e:
@@ -494,8 +516,12 @@ class FyersProvider:
             except ValueError:
                 d = {"s": "error", "message": body[:200].decode(errors="replace")}
             code = d.get("code")
-            if status == 429 or code == 429:                      # over the rate limit: back off and retry
-                time.sleep(1 + attempt)
+            if status == 429 or code == 429:                      # over the rate limit: every call pauses until the minute clears
+                self.cool_until = max(self.cool_until, time.time() + 65)
+                self.calls.clear()
+                self.per_min = max(60, int(self.per_min * 0.7))   # and go slower from now on
+                print(f"[fyers] rate limit reached on {path}; pausing all Fyers calls for 65 s, then at most {self.per_min} a minute"
+                      f" ({d.get('message') or status})", flush=True)
                 continue
             if status in (401, 403) or code in (-8, -15, -16, -17):
                 self.token = None                                 # expired or revoked: ask for a new login
@@ -522,12 +548,18 @@ class FyersProvider:
         return out
 
     def _many(self, symbols, res, frm, to):
-        out = {}
+        """Candles for many symbols, one call each. Daily candles survive an interrupted download (a rate-limit stop,
+        a network drop): the next attempt continues from where it stopped instead of starting the 200 calls again."""
+        key = (res, frm, to)
+        out = self.partial.setdefault(key, {}) if res == "D" else {}
         for s in symbols:
+            if s in out:
+                continue
             rows = self._hist(s, res, frm, to)
             if rows:
                 out[s] = rows
-        return out
+        self.partial.pop(key, None)
+        return {s: out[s] for s in symbols if s in out}
 
     def daily(self, symbols):
         to = self.now().date()
@@ -548,7 +580,7 @@ class FyersProvider:
 
     def session_day(self):
         """Date of the latest trading session: today once the market has traded, else the previous trading day."""
-        if self.sd is None or time.time() - self.sd_at > 60:
+        if self.sd is None or (time.time() - self.sd_at > 60 and not self.cooling()):     # keep the known day during a pause
             today = self.now().date()
             rows = self._hist("NSE:NIFTY50-INDEX", "1", today - dt.timedelta(days=7), today)
             self.sd, self.sd_at = (rows[-1]["ts"].date() if rows else today), time.time()
@@ -1065,7 +1097,8 @@ class Store:
 
     def health(self):
         try:
-            sess = self.latest_session().isoformat() if (self.intra or hasattr(self.prov, "quotes")) else None
+            busy = getattr(self.prov, "cooling", lambda: False)() and not getattr(self.prov, "sd", None)   # never wait out a pause here
+            sess = None if busy else self.latest_session().isoformat() if (self.intra or hasattr(self.prov, "quotes")) else None
         except Exception:
             sess = None
         own = getattr(self, "idx_daily", {}) if self.own_idx else self.idx
@@ -1076,6 +1109,9 @@ class Store:
                "sector_indices": f"{sum(1 for t in self.index_tickers if own.get(t))}/{len(self.index_tickers)}", "index_error": self.idx_err}
         if hasattr(self.prov, "logged_in"):
             out["logged_in"] = self.prov.logged_in()
+        if hasattr(self.prov, "cooling"):
+            out["rate_limit_pause_s"] = max(0, round(self.prov.cool_until - time.time())) if self.prov.cooling() else 0
+            out["calls_per_minute_cap"] = self.prov.per_min
             out["login_url"] = "/fyers/login"
         return out
 
@@ -1083,7 +1119,33 @@ class Store:
 # --------------------------------------------------------------------------
 # HTTP
 # --------------------------------------------------------------------------
-def make_handler(store, app_path):
+def make_handler(store, app_path, backup=None):
+    """store answers every request. With a backup (--provider auto: store = Fyers, backup = Yahoo) each data request goes
+    to Fyers when it is logged in and loaded, and to Yahoo otherwise, or when Fyers fails (then Fyers rests a minute)."""
+    def ready(st):
+        return (getattr(st.prov, "logged_in", lambda: True)() and bool(st.daily) and time.time() >= getattr(st, "rest_until", 0)
+                and not getattr(st.prov, "cooling", lambda: False)())    # in a rate-limit pause Yahoo answers at once
+
+    def order():
+        if backup is None:
+            return [store]
+        return [store, backup] if ready(store) else [backup]
+
+    def extra(st):
+        """Which source answered, and why Fyers did not (for the app's header)."""
+        if backup is None:
+            return {}
+        d = {"source": st.prov.name}
+        if st is backup:
+            if not store.prov.logged_in():
+                d["fyersLogin"], d["fyersNote"] = "/fyers/login", "Fyers is not logged in today"
+            elif not store.daily:
+                d["fyersNote"] = "Fyers is still loading (about a minute after login)"
+            else:
+                d["fyersNote"] = ("Fyers rate limit reached, back in about a minute" if store.prov.cooling() else
+                                  "Fyers had an error, retrying shortly" + (f": {store.err}" if store.err else ""))
+        return d
+
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a):
             pass
@@ -1111,46 +1173,64 @@ def make_handler(store, app_path):
                     html = html.replace("<head>", "<head><script>window.SCAN_SERVED=location.origin;</script>", 1)
                     return self._send(200, html.encode(), "text/html")
                 if u.path == "/health":
-                    return self._send(200, store.health())
+                    if backup is None:
+                        return self._send(200, store.health())
+                    return self._send(200, {"active": order()[0].prov.name, store.prov.name: store.health(), backup.prov.name: backup.health()})
                 if u.path.startswith("/fyers/"):
                     return self._fyers(u.path, q)
-                date = None
-                if q.get("date"):
+                stores = order()
+                for i, st in enumerate(stores):
                     try:
-                        date = dt.date.fromisoformat(q["date"])
-                    except ValueError:
-                        return self._send(400, {"error": "date must look like 2026-11-17"})
-                    if date > store.prov.now().date():
-                        return self._send(404, {"error": "that date is in the future"})
-                if u.path == "/sessions":
-                    return self._send(200, store.sessions())
-                if u.path == "/snapshot":
-                    at = q.get("at")
-                    if at and not (len(at) >= 4 and ":" in at):
-                        return self._send(400, {"error": "at must look like 09:20"})
-                    try:
-                        return self._send(200, store.snapshot(at, date))
-                    except LookupError as e:
-                        return self._send(404, {"error": str(e)})
-                if u.path == "/ema":
-                    flag = lambda k: q.get(k) in ("1", "true")
-                    try:
-                        return self._send(200, store.ema_scan(date, flag("hold"), flag("close_break"), flag("color")))
-                    except LookupError as e:
-                        return self._send(404, {"error": str(e)})
-                if u.path == "/candles":
-                    try:
-                        rows = store.candles(q.get("symbol", ""), q.get("tf", "5m"), date)
-                    except LookupError as e:
-                        return self._send(404, {"error": str(e)})
-                    return self._send(404, {"error": "unknown symbol"}) if rows is None else self._send(200, rows)
-                self._send(404, {"error": "not found"})
+                        code, body = self._data(st, u.path, q)
+                    except Exception as e:
+                        if i + 1 == len(stores):
+                            raise
+                        if not isinstance(e, (LoginNeeded, Loading)):    # a real failure: let Yahoo answer for a minute
+                            st.rest_until, st.err = time.time() + 60, repr(e)
+                        continue
+                    if code == 200 and isinstance(body, dict):
+                        body = dict(body, **extra(st))
+                    return self._send(code, body)
             except LoginNeeded as e:
                 self._send(401, {"error": str(e), "login": "/fyers/login"})
             except Loading as e:
                 self._send(503, {"error": str(e), "loading": True})
             except Exception as e:
                 self._send(500, {"error": repr(e)})
+
+        def _data(self, store, path, q):
+            """(status, body) for one data request from one store. Raises LoginNeeded, Loading or other errors."""
+            date = None
+            if q.get("date"):
+                try:
+                    date = dt.date.fromisoformat(q["date"])
+                except ValueError:
+                    return (400, {"error": "date must look like 2026-11-17"})
+                if date > store.prov.now().date():
+                    return (404, {"error": "that date is in the future"})
+            if path == "/sessions":
+                return (200, store.sessions())
+            if path == "/snapshot":
+                at = q.get("at")
+                if at and not (len(at) >= 4 and ":" in at):
+                    return (400, {"error": "at must look like 09:20"})
+                try:
+                    return (200, store.snapshot(at, date))
+                except LookupError as e:
+                    return (404, {"error": str(e)})
+            if path == "/ema":
+                flag = lambda k: q.get(k) in ("1", "true")
+                try:
+                    return (200, store.ema_scan(date, flag("hold"), flag("close_break"), flag("color")))
+                except LookupError as e:
+                    return (404, {"error": str(e)})
+            if path == "/candles":
+                try:
+                    rows = store.candles(q.get("symbol", ""), q.get("tf", "5m"), date)
+                except LookupError as e:
+                    return (404, {"error": str(e)})
+                return (404, {"error": "unknown symbol"}) if rows is None else (200, rows)
+            return 404, {"error": "not found"}
 
         def _page(self, title, msg, home=True):
             html = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>" + title +
@@ -1161,7 +1241,7 @@ def make_handler(store, app_path):
         def _fyers(self, path, q):
             prov = store.prov
             if not hasattr(prov, "auth_url"):
-                return self._send(404, {"error": "the server is not running with --provider fyers"})
+                return self._send(404, {"error": "the server is not running with --provider fyers or auto (with fyers.json)"})
             if path == "/fyers/login":                     # off to Fyers' own login page; credentials never pass through here
                 self.send_response(302)
                 self.send_header("Location", prov.auth_url())
@@ -1188,7 +1268,8 @@ def make_handler(store, app_path):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--provider", choices=["mock", "yahoo", "kite", "fyers"], default="yahoo")
+    ap.add_argument("--provider", choices=["auto", "mock", "yahoo", "kite", "fyers"], default="yahoo",
+                    help="auto = Fyers when logged in, Yahoo otherwise (needs fyers.json; without it, Yahoo only)")
     ap.add_argument("--host", default="127.0.0.1", help="use 0.0.0.0 to open it from your phone on the same Wi-Fi")
     ap.add_argument("--port", type=int, default=8787)
     ap.add_argument("--refresh", type=float, default=15, help="seconds between data refreshes")
@@ -1202,8 +1283,16 @@ def main():
     if a.provider != "mock" and not a.no_live_list:
         uni, msg = sync_universe(uni)
         print(f"[universe] {msg}", flush=True)
+    backup_prov = None
     if a.provider == "mock":
         prov = MockProvider(uni, a.mock_time, a.mock_speed)
+    elif a.provider == "auto":
+        backup_prov = YahooProvider(uni)
+        try:
+            prov = FyersProvider(uni, a.port)
+        except SystemExit as e:
+            print(f"[auto] Fyers is not set up ({e}). Running on Yahoo only.", flush=True)
+            prov, backup_prov = backup_prov, None
     elif a.provider == "yahoo":
         prov = YahooProvider(uni)
     elif a.provider == "kite":
@@ -1213,34 +1302,39 @@ def main():
     sectors, failed = load_sectors(uni, offline=a.provider == "mock" or a.no_live_list)
     print(f"[sectors] {len(sectors)} sectors" + (f"; stock lists from cache for {failed}" if failed else ""), flush=True)
     store = Store(prov, uni, a.refresh, sectors)
-    background = a.provider == "fyers"          # about a minute of downloads at Fyers' rate limit: serve the app (and its login) meanwhile
-    if background:
-        login = "" if prov.logged_in() else f"  ->  log in first: http://localhost:{a.port}/fyers/login"
-        print(f"[fyers] loading {len(uni)} symbols in the background{login}", flush=True)
-    else:
-        print(f"[{a.provider}] loading {len(uni)} symbols ...", flush=True)
-        store.refresh(force=True)
-        h = store.health()
-        print(f"[{a.provider}] daily {h['symbols_daily']}, intraday {h['symbols_intraday']}, sector indices {h['sector_indices']}, session {h['session_date']}, error {h['last_error']}", flush=True)
+    backup = Store(backup_prov, uni, a.refresh, sectors) if backup_prov else None
+    if backup:
+        print(f"[auto] Fyers when logged in, Yahoo until then (or if Fyers fails)", flush=True)
 
-    def loop():
+    def loop(st, background):
         first = background
         while True:
             if not first:
                 time.sleep(a.refresh)
             first = False
-            store.refresh()
-            if background and store.daily and not getattr(store, "_told", False):
-                store._told = True
-                print(f"[fyers] ready: daily {len(store.daily)}, error {store.err}", flush=True)
-    threading.Thread(target=loop, daemon=True).start()
-    if a.provider == "fyers":
-        threading.Thread(target=store.scan_clock, daemon=True).start()
+            st.refresh()
+            if background and st.daily and not getattr(st, "_told", False):
+                st._told = True
+                print(f"[fyers] ready: daily {len(st.daily)}, error {st.err}", flush=True)
+
+    for st in [store] + ([backup] if backup else []):
+        name = st.prov.name
+        background = name == "fyers"            # about a minute of downloads at Fyers' rate limit: serve the app (and its login) meanwhile
+        if background:
+            login = "" if st.prov.logged_in() else f"  ->  log in: http://localhost:{a.port}/fyers/login"
+            print(f"[fyers] loading {len(uni)} symbols in the background{login}", flush=True)
+            threading.Thread(target=st.scan_clock, daemon=True).start()
+        else:
+            print(f"[{name}] loading {len(uni)} symbols ...", flush=True)
+            st.refresh(force=True)
+            h = st.health()
+            print(f"[{name}] daily {h['symbols_daily']}, intraday {h['symbols_intraday']}, sector indices {h['sector_indices']}, session {h['session_date']}, error {h['last_error']}", flush=True)
+        threading.Thread(target=loop, args=(st, background), daemon=True).start()
 
     # Windows lets a second server bind the same port and the old one keeps answering, so refuse to start instead
     ThreadingHTTPServer.allow_reuse_address = os.name != "nt"
     try:
-        srv = ThreadingHTTPServer((a.host, a.port), make_handler(store, a.app))
+        srv = ThreadingHTTPServer((a.host, a.port), make_handler(store, a.app, backup))
     except OSError as e:
         raise SystemExit(f"Port {a.port} is already in use ({e}). Another copy of server.py is probably still running: "
                          f"stop it (Task Manager, or: Get-NetTCPConnection -LocalPort {a.port} -State Listen | "
