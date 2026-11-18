@@ -7,11 +7,14 @@ Serves the scanner app and the data it needs:
   GET /snapshot              current quotes for the whole universe
   GET /snapshot?at=09:20     quotes as of that time today (used to lock the 9:20 shortlist)
   GET /candles?symbol=X&tf=5m|1d
+  GET /ema                   20 EMA buy and sell setups on 5-minute candles (see ema_setup.py)
   GET /health                provider status, symbols loaded, last error
 
 Providers:  mock (synthetic, for testing)  |  yahoo (free, no account)  |  kite (Zerodha Kite Connect)
+            fyers (Fyers API v3, real-time and free with an account; log in daily at /fyers/login)
 """
 import argparse, datetime as dt, json, math, os, random, sys, threading, time, zlib
+from ema_setup import ema, buy_setups, sell_setups
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
@@ -20,6 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OPEN = dt.time(9, 15)
 CLOSE = dt.time(15, 30)
 ONE_MIN = dt.timedelta(minutes=1)
+FIVE_MIN = dt.timedelta(minutes=5)
 
 
 def load_universe():
@@ -94,7 +98,7 @@ def load_sectors(uni, offline=False):
             members = [x for x in meta if meta[x].get("industry") in d["industry"]]
         else:
             members = d.get("symbols", [])
-        out.append({"name": d["name"], "yahoo": d.get("yahoo"), "constituents": len(members), "members": [m for m in members if m in meta]})
+        out.append({"name": d["name"], "yahoo": d.get("yahoo"), "fyers": d.get("fyers"), "constituents": len(members), "members": [m for m in members if m in meta]})
     with open(cache_path, "w") as f:
         json.dump(cache, f, indent=1)
     return out, failed
@@ -141,6 +145,24 @@ def sync_universe(uni):
 
 def r2(x):
     return round(float(x), 2)
+
+
+def bucket5(t):
+    """Start of the 5-minute candle that contains t (candles start at 09:15, 09:20, ...)."""
+    return t.replace(minute=t.minute - t.minute % 5, second=0, microsecond=0)
+
+
+def to5m(rows):
+    """1-minute candles -> 5-minute candles."""
+    out = []
+    for c in rows:
+        b = bucket5(c["ts"])
+        if out and out[-1]["ts"] == b:
+            x = out[-1]
+            x["h"], x["l"], x["c"], x["v"] = max(x["h"], c["h"]), min(x["l"], c["l"]), c["c"], x["v"] + c["v"]
+        else:
+            out.append(dict(c, ts=b))
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -230,6 +252,12 @@ class MockProvider:
             out[sym] = rows
         return out
 
+    def candles5(self, symbols, day=None):
+        """5-minute candles for the 20 EMA scan. The mock market has only today, so its EMA starts at 09:15."""
+        if day is not None:
+            raise LookupError("the mock market has only today")
+        return {s: to5m(rows) for s, rows in self.intraday(symbols).items()}
+
 
 def parse_yf_frame(df, symbols, suffix=".NS"):
     """Turn a yfinance multi-ticker DataFrame (group_by='ticker') into {symbol: [candles]}."""
@@ -281,6 +309,14 @@ class YahooProvider:
         latest = max(rows[-1]["ts"].date() for rows in raw.values())
         return {s: [c for c in rows if c["ts"].date() == latest] for s, rows in raw.items()}
 
+    def candles5(self, symbols, day=None):
+        """5-minute candles for the 20 EMA scan: the session plus earlier days, so the EMA is warmed up (one download)."""
+        if day is None:
+            return parse_yf_frame(self._download(symbols, period="5d", interval="5m"), symbols)
+        df = self.yf.download([s + ".NS" for s in symbols], start=(day - dt.timedelta(days=7)).isoformat(), end=(day + dt.timedelta(days=1)).isoformat(),
+                              interval="5m", group_by="ticker", threads=True, progress=False, auto_adjust=False)
+        return parse_yf_frame(df, symbols)
+
 
 class KiteProvider:
     """Zerodha Kite Connect. Needs KITE_API_KEY and a fresh KITE_ACCESS_TOKEN (the token expires every day)."""
@@ -327,6 +363,12 @@ class KiteProvider:
         frm = dt.datetime.combine(day, dt.time(9, 15)); to = dt.datetime.combine(day, dt.time(15, 30))
         return {s: self._hist(s, frm, to, "minute") for s in symbols if s in self.tok}, 1
 
+    def candles5(self, symbols, day=None):
+        """5-minute candles for the 20 EMA scan, a week back for the EMA warm-up (about 70 s at Kite's rate limit)."""
+        day = day or self.now().date()
+        frm = dt.datetime.combine(day - dt.timedelta(days=7), dt.time(9, 15)); to = dt.datetime.combine(day, dt.time(15, 30))
+        return {s: self._hist(s, frm, to, "5minute") for s in symbols if s in self.tok}
+
     def quotes(self, symbols):
         out = {}
         for i in range(0, len(symbols), 400):
@@ -340,6 +382,202 @@ class KiteProvider:
         return out
 
 
+class LoginNeeded(Exception):
+    """The broker needs a fresh login before it will send data."""
+
+
+class Loading(Exception):
+    """The first download is still under way."""
+
+
+FYERS_API = "https://api-t1.fyers.in/api/v3"
+FYERS_DATA = "https://api-t1.fyers.in/data"
+
+
+class FyersProvider:
+    """Fyers API v3: real-time NSE quotes and 1-minute candles, free with a Fyers account.
+    Needs an app from myapi.fyers.in (App ID and Secret ID, in fyers.json or FYERS_APP_ID / FYERS_SECRET_KEY)
+    and one login per day at /fyers/login. Sector % comes from Fyers' own index quotes."""
+    name = "fyers"
+    index_key = "fyers"            # sectors.json field with this provider's index symbol
+    QUOTE_TTL = 5                  # seconds a quote stays fresh (Fyers allows 200 calls a minute in all)
+
+    def __init__(self, universe, port=8787):
+        import collections, secrets
+        cfg = {}
+        path = os.path.join(HERE, "fyers.json")
+        if os.path.exists(path):
+            with open(path) as f:
+                cfg = json.load(f)
+        self.app_id = os.environ.get("FYERS_APP_ID") or cfg.get("app_id")
+        self.secret = os.environ.get("FYERS_SECRET_KEY") or cfg.get("secret_key")
+        self.redirect = os.environ.get("FYERS_REDIRECT_URI") or cfg.get("redirect_uri") or f"http://127.0.0.1:{port}/fyers/callback"
+        if not self.app_id or not self.secret:
+            raise SystemExit("Put your Fyers App ID and Secret ID in fyers.json (see README) or set FYERS_APP_ID and FYERS_SECRET_KEY")
+        self.token_path = os.path.join(HERE, "fyers_token.json")
+        self.token = None
+        try:
+            with open(self.token_path) as f:
+                t = json.load(f)
+            if t.get("date") == self.now().date().isoformat():       # Fyers tokens last one trading day
+                self.token = t["access_token"]
+        except Exception:
+            pass
+        self.state = secrets.token_urlsafe(16)
+        self.calls, self.rl = collections.deque(), threading.Lock()
+        self.qcache, self.qlock = {}, threading.Lock()
+        self.sd, self.sd_at = None, 0.0
+
+    def now(self):
+        return dt.datetime.now(IST)
+
+    # ---- login ----
+    def auth_url(self):
+        from urllib.parse import urlencode
+        return FYERS_API + "/generate-authcode?" + urlencode({"client_id": self.app_id, "redirect_uri": self.redirect,
+                                                                "response_type": "code", "state": self.state})
+
+    def finish_login(self, auth_code, state):
+        import hashlib, urllib.request, urllib.error
+        if state != self.state:
+            raise ValueError("login state did not match; start again from /fyers/login")
+        body = json.dumps({"grant_type": "authorization_code", "code": auth_code,
+                           "appIdHash": hashlib.sha256(f"{self.app_id}:{self.secret}".encode()).hexdigest()}).encode()
+        req = urllib.request.Request(FYERS_API + "/validate-authcode", data=body, headers={"Content-Type": "application/json"})
+        try:
+            d = json.loads(urllib.request.urlopen(req, timeout=20).read())
+        except urllib.error.HTTPError as e:
+            d = json.loads(e.read() or b"{}")
+        if d.get("s") != "ok" or not d.get("access_token"):
+            raise RuntimeError(d.get("message") or "Fyers did not return an access token")
+        self.token = d["access_token"]
+        with open(self.token_path, "w") as f:
+            json.dump({"date": self.now().date().isoformat(), "access_token": self.token}, f)
+        self.sd_at = 0.0
+
+    def logged_in(self):
+        return bool(self.token)
+
+    # ---- REST ----
+    def _wait(self):
+        """Stay under Fyers' limits: 10 calls a second and 200 a minute."""
+        with self.rl:
+            while True:
+                t = time.time()
+                while self.calls and t - self.calls[0] > 60:
+                    self.calls.popleft()
+                if len(self.calls) < 185 and sum(1 for c in self.calls if t - c < 1) < 9:
+                    self.calls.append(t)
+                    return
+                time.sleep(0.05)
+
+    def _get(self, path, params):
+        import urllib.request, urllib.error
+        from urllib.parse import urlencode
+        if not self.token:
+            raise LoginNeeded("Log in to Fyers to load market data")
+        url = FYERS_DATA + path + "?" + urlencode(params)
+        for attempt in range(4):
+            self._wait()
+            req = urllib.request.Request(url, headers={"Authorization": f"{self.app_id}:{self.token}", "version": "3"})
+            try:
+                status, body = 200, urllib.request.urlopen(req, timeout=20).read()
+            except urllib.error.HTTPError as e:
+                status, body = e.code, e.read()
+            except urllib.error.URLError as e:
+                if attempt == 3:
+                    raise RuntimeError(f"Fyers unreachable: {e.reason}")
+                time.sleep(1)
+                continue
+            try:
+                d = json.loads(body)
+            except ValueError:
+                d = {"s": "error", "message": body[:200].decode(errors="replace")}
+            code = d.get("code")
+            if status == 429 or code == 429:                      # over the rate limit: back off and retry
+                time.sleep(1 + attempt)
+                continue
+            if status in (401, 403) or code in (-8, -15, -16, -17):
+                self.token = None                                 # expired or revoked: ask for a new login
+                raise LoginNeeded("Fyers login expired. Log in again")
+            if d.get("s") not in ("ok", "no_data"):
+                raise RuntimeError(f"Fyers {path}: {d.get('message') or d}")
+            return d
+        raise RuntimeError(f"Fyers {path}: still over the rate limit")
+
+    @staticmethod
+    def fy(sym):
+        return sym if ":" in sym else f"NSE:{sym}-EQ"
+
+    def _hist(self, sym, res, frm, to):
+        d = self._get("/history", {"symbol": self.fy(sym), "resolution": res, "date_format": 1,
+                                   "range_from": frm.isoformat(), "range_to": to.isoformat(), "cont_flag": 1})
+        out = []
+        for row in d.get("candles") or []:
+            t, o, h, l, c = row[:5]
+            ts = dt.datetime.fromtimestamp(t, IST)
+            if res == "D":
+                ts = ts.replace(hour=0, minute=0, second=0, microsecond=0)
+            out.append({"ts": ts, "o": r2(o), "h": r2(h), "l": r2(l), "c": r2(c), "v": int(row[5]) if len(row) > 5 and row[5] else 0})
+        return out
+
+    def _many(self, symbols, res, frm, to):
+        out = {}
+        for s in symbols:
+            rows = self._hist(s, res, frm, to)
+            if rows:
+                out[s] = rows
+        return out
+
+    def daily(self, symbols):
+        to = self.now().date()
+        return self._many(symbols, "D", to - dt.timedelta(days=200), to)
+
+    def intraday(self, symbols, upto=None):
+        day = (upto or self.now()).date()
+        return self._many(symbols, "1", day, day)
+
+    def day_candles(self, symbols, day, suffix=None):
+        """1-minute candles for one past session (about 1 minute for 200 stocks at Fyers' rate limit)."""
+        return self._many(symbols, "1", day, day), 1
+
+    def candles5(self, symbols, day=None):
+        """5-minute candles for the 20 EMA scan, a week back for the EMA warm-up (about a minute at Fyers' rate limit)."""
+        day = day or self.now().date()
+        return self._many(symbols, "5", day - dt.timedelta(days=7), day)
+
+    def session_day(self):
+        """Date of the latest trading session: today once the market has traded, else the previous trading day."""
+        if self.sd is None or time.time() - self.sd_at > 60:
+            today = self.now().date()
+            rows = self._hist("NSE:NIFTY50-INDEX", "1", today - dt.timedelta(days=7), today)
+            self.sd, self.sd_at = (rows[-1]["ts"].date() if rows else today), time.time()
+        return self.sd
+
+    def quotes(self, symbols, fresh=False):
+        """{symbol: {ltp, open, high, low, prevClose}}, read at most every QUOTE_TTL seconds unless fresh."""
+        key = tuple(symbols)
+        with self.qlock:
+            hit = self.qcache.get(key)
+            if hit and not fresh and time.time() - hit[0] < self.QUOTE_TTL:
+                return hit[1]
+            out = {}
+            for i in range(0, len(symbols), 50):                 # 50 symbols per call
+                chunk = symbols[i:i + 50]
+                back = {self.fy(s): s for s in chunk}
+                d = self._get("/quotes", {"symbols": ",".join(back)})
+                for item in d.get("d") or []:
+                    v = item.get("v") or {}
+                    s = back.get(item.get("n") or v.get("symbol"))
+                    if not s or item.get("s") != "ok" or not v.get("lp"):
+                        continue
+                    lp = v["lp"]
+                    out[s] = {"ltp": r2(lp), "open": r2(v.get("open_price") or lp), "high": r2(v.get("high_price") or lp),
+                              "low": r2(v.get("low_price") or lp), "prevClose": r2(v.get("prev_close_price") or 0)}
+            self.qcache[key] = (time.time(), out)
+            return out
+
+
 # --------------------------------------------------------------------------
 # Store: caches provider data and builds the API payloads
 # --------------------------------------------------------------------------
@@ -351,8 +589,13 @@ class Store:
         for sec in self.sectors:
             for m in sec["members"]:
                 self.sec_of.setdefault(m, []).append(sec["name"])
-        self.index_tickers = [sec["yahoo"] for sec in self.sectors if sec.get("yahoo")] if prov.name != "mock" else []
+        # index symbols come from the provider itself when it has them (Fyers), else from Yahoo
+        self.tkey = getattr(prov, "index_key", "yahoo")
+        self.own_idx = self.tkey != "yahoo"
+        self.index_tickers = [sec[self.tkey] for sec in self.sectors if sec.get(self.tkey)] if prov.name != "mock" else []
         self.idx, self.idx_err = {}, None
+        self.caps = {}                                             # quotes read right at a scan time: {cutoff iso: {"q", "iq"}}
+        self.at_lock, self.refresh_lock = threading.Lock(), threading.Lock()
         self.syms = [x["symbol"] for x in universe]
         self.meta = {x["symbol"]: x for x in universe}
         self.daily, self.intra, self.at_cache = {}, {}, {}
@@ -360,10 +603,26 @@ class Store:
         self.intra_now = None
         self.err, self.lock = None, threading.Lock()
         self.days, self.day_lock = {}, threading.Lock()            # past sessions: {date: {"stocks", "idx", "step"}}
+        # 20 EMA scan: 5-minute candles of the latest session (with earlier days for the warm-up) and of past days
+        self.c5l, self.c5_err, self.c5_lock = None, None, threading.Lock()   # c5l = (fetched epoch, market time, {symbol: rows})
+        self.c5days, self.c5day_lock = {}, threading.Lock()
+        self.ticks = {}                                            # broker: forming 5-minute candle built from live quotes
 
-    def refresh(self, force=False):
+    def refresh(self, force=False, wait=False):
+        """Pull new data. A refresh already under way is not duplicated (wait=True waits for it and then refreshes)."""
+        if not self.refresh_lock.acquire(blocking=wait):
+            return
         try:
-            if force or not self.daily or time.time() - self.daily_at > 6 * 3600:
+            self._refresh(force)
+        finally:
+            self.refresh_lock.release()
+
+    def _refresh(self, force):
+        try:
+            stale = time.time() - self.daily_at > 6 * 3600
+            if self.own_idx:                                  # rate-limited broker: daily candles once per day
+                stale = dt.datetime.fromtimestamp(self.daily_at, IST).date() != self.prov.now().date()
+            if force or not self.daily or stale:
                 d = self.prov.daily(self.syms)
                 with self.lock:
                     self.daily, self.daily_at = d, time.time()
@@ -381,6 +640,15 @@ class Store:
         """1-minute candles for the official sector indices (Yahoo), used for the sector % on the heatmap."""
         if not self.index_tickers:
             return
+        if self.own_idx:                                      # live index values come with each snapshot; only official closes here
+            try:
+                if dt.datetime.fromtimestamp(getattr(self, "idx_daily_at", 0), IST).date() != self.prov.now().date():
+                    dd = self.prov.daily(self.index_tickers)
+                    self.idx_daily, self.idx_daily_at = {t: {c["ts"].date(): c["c"] for c in rows} for t, rows in dd.items()}, time.time()
+                self.idx_err = None
+            except Exception as e:
+                self.idx_err = repr(e)
+            return
         try:
             import yfinance as yf
             df = yf.download(self.index_tickers, period="5d", interval="1m", group_by="ticker", threads=True, progress=False, auto_adjust=False)
@@ -397,17 +665,26 @@ class Store:
         except Exception as e:
             self.idx_err = repr(e)
 
-    def sectors_payload(self, sess, cutoff=None, idx=None, step=ONE_MIN):
-        """[{name, members, constituents, custom, value, prevClose, chg}] - chg is null for custom sectors (the app averages their stocks)."""
+    def sectors_payload(self, sess, cutoff=None, idx=None, step=ONE_MIN, live=None):
+        """[{name, members, constituents, custom, value, prevClose, chg}] - chg is null for custom sectors (the app averages their stocks).
+        live = {index symbol: quote} uses quoted index values instead of candles."""
         out = []
         idx = self.idx if idx is None else idx
         for sec in self.sectors:
-            d = {"name": sec["name"], "members": sec["members"], "constituents": sec["constituents"], "custom": not sec.get("yahoo"),
+            tk = sec.get(self.tkey)
+            d = {"name": sec["name"], "members": sec["members"], "constituents": sec["constituents"], "custom": not tk,
                  "value": None, "prevClose": None, "chg": None}
-            rows = idx.get(sec.get("yahoo")) or []
+            lq = (live or {}).get(tk)
+            if lq is not None:
+                if lq.get("prevClose"):
+                    d["value"], d["prevClose"] = lq["ltp"], lq["prevClose"]
+                    d["chg"] = round((lq["ltp"] / lq["prevClose"] - 1) * 100, 3)
+                out.append(d)
+                continue
+            rows = idx.get(tk) or []
             today = [c for c in rows if c["ts"].date() == sess and (cutoff is None or c["ts"] + step <= cutoff)]
             prev = [c for c in rows if c["ts"].date() < sess]
-            closes = getattr(self, "idx_daily", {}).get(sec.get("yahoo"), {})
+            closes = getattr(self, "idx_daily", {}).get(tk, {})
             earlier = [k for k in closes if k < sess]
             if today and (prev or earlier):
                 # official closing value when Yahoo has it for that exact day (index closes are not the last 1-minute print)
@@ -443,17 +720,42 @@ class Store:
         return {"o": f[0]["o"], "h": max(c["h"] for c in f), "l": min(c["l"] for c in f), "c": f[-1]["c"]}
 
     def _first5_broker(self, now):
-        """Broker quote path: fetch 09:15-09:20 minutes once per day (cached) after 09:20."""
+        """Broker quote path: the 09:15-09:20 candle. From quotes read right at 09:20 when the server caught that moment
+        (day open, high and low so far, last price), else from 1-minute candles downloaded once in the background."""
         cutoff = self._cutoff(now.date(), "09:20")
+        if now < cutoff:
+            return {}
+        cap = self.caps.get(cutoff.isoformat())
+        if cap:
+            return {s: {"o": q["open"], "h": q["high"], "l": q["low"], "c": q["ltp"]} for s, q in cap["q"].items()}
         if now < cutoff + dt.timedelta(seconds=5):
             return {}
-        key = cutoff.isoformat()
-        if key not in self.at_cache:
-            self.at_cache[key] = self.prov.intraday(self.syms, upto=cutoff)
-        return {s: self._first5(rows) for s, rows in self.at_cache[key].items()}
+        rows = self._at(cutoff, wait=False)
+        return {s: self._first5(r) for s, r in rows.items()} if rows else {}
 
     def latest_session(self):
+        if hasattr(self.prov, "session_day"):
+            return self.prov.session_day()
         return self.prov.now().date() if hasattr(self.prov, "quotes") else self.session_date()
+
+    def scan_clock(self, at="09:20"):
+        """Read every quote the moment the scan time passes, so the first 5-minute candle and the lock are exact without
+        waiting for 200 candle downloads (Fyers allows 200 calls a minute)."""
+        while True:
+            now = self.prov.now()
+            cut = self._cutoff(now.date(), at)
+            if now > cut + dt.timedelta(seconds=10):
+                cut += dt.timedelta(days=1)                 # today's moment has passed: wait for tomorrow's
+            wait = (cut - now).total_seconds() + 0.3
+            if wait > 0:
+                time.sleep(min(wait, 30))
+                continue
+            if cut.isoformat() not in self.caps and getattr(self.prov, "logged_in", lambda: True)():
+                try:
+                    self.capture(cut)                       # on a holiday this is never used: snapshots only read it for a live session
+                except Exception as e:
+                    self.err = repr(e)
+            time.sleep(15)
 
     def sessions(self):
         """Trading days the app can show: the latest session plus past days with intraday data (about 60 days back)."""
@@ -472,8 +774,15 @@ class Store:
             if not hasattr(self.prov, "day_candles"):
                 raise LookupError("this data source has no past sessions")
             stocks, step = self.prov.day_candles(self.syms, day)
-            idx = {}
-            if self.index_tickers:
+            idx, idx_step = {}, 5
+            if self.index_tickers and self.own_idx:
+                try:
+                    idx, idx_step = self.prov.day_candles(self.index_tickers, day)
+                except LookupError:
+                    raise
+                except Exception:
+                    idx = {}
+            elif self.index_tickers:
                 try:
                     import yfinance as yf
                     # a few days back as well, so indices without daily history still get a previous close
@@ -484,7 +793,7 @@ class Store:
                     idx = {}
             if not any(stocks.values()):
                 raise LookupError(f"no market data for {day.isoformat()} (weekend, holiday, or older than about 60 days)")
-            data = {"stocks": stocks, "idx": idx, "step": max(step, 5) if idx else step, "stock_step": step}
+            data = {"stocks": stocks, "idx": idx, "step": max(step, idx_step) if idx else step, "stock_step": step, "idx_step": idx_step}
             self.days[day] = data
             for old in sorted(self.days)[:-5]:
                 self.days.pop(old, None)
@@ -508,36 +817,73 @@ class Store:
         end = last + step if last else self._cutoff(day, "15:30")
         data_time = min(cutoff, end) if cutoff else end
         return {"time": data_time.isoformat(), "dataTime": data_time.isoformat(), "session": day.isoformat(), "past": True, "stocks": stocks,
-                "sectors": self.sectors_payload(day, cutoff, dd["idx"], dt.timedelta(minutes=5))}
+                "sectors": self.sectors_payload(day, cutoff, dd["idx"], dt.timedelta(minutes=dd.get("idx_step", 5)))}
+
+    def _quote_snapshot(self, sess, q, iq, f5, t, cutoff=None):
+        stocks = []
+        for s, d in q.items():
+            pd = self._prev_day(s, sess)
+            if pd and s in self.meta:
+                stocks.append(self._pack(s, d["ltp"], d["open"], d["high"], d["low"], d["prevClose"], pd, f5.get(s)))
+        secs = self.sectors_payload(sess, cutoff, live=iq) if self.own_idx else self.sectors_payload(sess, cutoff)
+        return {"time": t.isoformat(), "dataTime": t.isoformat(), "session": sess.isoformat(), "stocks": stocks, "sectors": secs}
+
+    def capture(self, cutoff):
+        """Quotes read right after a scan time: what a terminal shows at that moment (day open/high/low up to then, last price)."""
+        q = self.prov.quotes(self.syms, fresh=True)
+        iq = self.prov.quotes(self.index_tickers, fresh=True) if self.index_tickers else {}
+        if self.prov.now() - cutoff > dt.timedelta(seconds=12):     # read too late to stand for that moment
+            return None
+        self.caps[cutoff.isoformat()] = cap = {"q": q, "iq": iq}
+        return cap
+
+    def _at(self, cutoff, wait=True):
+        """1-minute candles up to a cut-off for every stock (and the provider's own indices), fetched once and cached.
+        wait=False starts the download in the background and returns None until it is ready."""
+        key = cutoff.isoformat()
+        if key in self.at_cache:
+            return self.at_cache[key]
+        if not wait:
+            if not self.at_lock.locked():
+                threading.Thread(target=self._at, args=(cutoff,), daemon=True).start()
+            return None
+        with self.at_lock:
+            if key in self.at_cache:
+                return self.at_cache[key]
+            data = self.prov.intraday(self.syms + (self.index_tickers if self.own_idx else []), upto=cutoff)
+            if self.prov.now() >= cutoff + dt.timedelta(seconds=5):  # never cache a cut-off that has not passed yet
+                self.at_cache[key] = data
+            return data
 
     def snapshot(self, at=None, date=None):
+        if not self.daily:                                  # nothing to compare against yet (a broker loads in the background)
+            if hasattr(self.prov, "logged_in") and not self.prov.logged_in():
+                raise LoginNeeded("Log in to Fyers to load market data")
+            raise Loading("Loading daily candles from " + self.prov.name.capitalize() + " (about a minute at its rate limit)"
+                          + (f". Last error: {self.err}" if self.err and "LoginNeeded" not in self.err else ""))
         if date and date != self.latest_session():
             return self._snapshot_day(date, at)
         now = self.prov.now()
-        # Live quote path (brokers)
-        if at is None and hasattr(self.prov, "quotes"):
-            q = self.prov.quotes(self.syms)
-            sess = now.date()
-            f5 = self._first5_broker(now)
-            stocks = []
-            for s, d in q.items():
-                pd = self._prev_day(s, sess)
-                if pd:
-                    stocks.append(self._pack(s, d["ltp"], d["open"], d["high"], d["low"], d["prevClose"], pd, f5.get(s)))
-            return {"time": now.isoformat(), "dataTime": now.isoformat(), "session": sess.isoformat(), "stocks": stocks,
-                    "sectors": self.sectors_payload(sess)}
-        # Candle path
-        if hasattr(self.prov, "quotes"):                    # historical snapshot for a broker: fetch minutes up to the cut-off once and cache
-            cutoff = self._cutoff(now.date(), at)
-            key = cutoff.isoformat()
-            if key not in self.at_cache:
-                self.at_cache[key] = self.prov.intraday(self.syms, upto=cutoff)
-            intra, sess = self.at_cache[key], now.date()
+        if hasattr(self.prov, "quotes"):
+            sess = self.latest_session()
+            if sess != now.date():                          # before today's first trade, or a holiday: the last session from its candles
+                return self._snapshot_day(sess, at)
+            if at is None:                                  # live quotes
+                iq = self.prov.quotes(self.index_tickers) if self.own_idx else None
+                return self._quote_snapshot(sess, self.prov.quotes(self.syms), iq, self._first5_broker(now), now)
+            cutoff = self._cutoff(sess, at)
+            if self.own_idx and cutoff <= now:              # quotes read within seconds of the scan time
+                cap = self.caps.get(cutoff.isoformat())
+                if cap is None and now - cutoff <= dt.timedelta(seconds=10):
+                    cap = self.capture(cutoff)
+                if cap:
+                    return self._quote_snapshot(sess, cap["q"], cap["iq"], self._first5_broker(now), cutoff, cutoff)
+            intra = self._at(cutoff)                        # otherwise 1-minute candles up to the cut-off
         else:
             intra, sess = self.intra, self.session_date()
         cutoff = self._cutoff(sess, at) if at else None
         if cutoff and not hasattr(self.prov, "quotes") and cutoff <= now and (self.intra_now is None or self.intra_now < cutoff + dt.timedelta(seconds=3)):
-            self.refresh()                                  # the cache predates the cut-off: pull the final minutes before answering
+            self.refresh(wait=True)                         # the cache predates the cut-off: pull the final minutes before answering
             intra = self.intra
         stocks = []
         for s in self.syms:
@@ -553,7 +899,7 @@ class Store:
         last = max((rows[-1]["ts"] for rows in intra.values() if rows), default=None)
         data_time = min(cutoff, last + ONE_MIN) if (cutoff and last) else (last + ONE_MIN if last else now)
         return {"time": (cutoff or now).isoformat(), "dataTime": data_time.isoformat(), "session": sess.isoformat(), "stocks": stocks,
-                "sectors": self.sectors_payload(sess, cutoff)}
+                "sectors": self.sectors_payload(sess, cutoff, intra if self.own_idx else None)}
 
     @staticmethod
     def _cutoff(day, at):
@@ -563,16 +909,19 @@ class Store:
     def candles(self, sym, tf, date=None):
         if sym not in self.meta:
             return None
-        sess = self.session_date() if self.intra else self.prov.now().date()
-        past = bool(date and date != self.latest_session())
+        broker = hasattr(self.prov, "quotes")
+        latest = self.latest_session()
+        sess = latest if (broker or self.intra) else self.prov.now().date()
+        past = bool(date and date != latest)
         if past:
             sess = date
         if tf == "1d":
             rows = [c for c in self.daily.get(sym, []) if c["ts"].date() < sess][-30:]
             return [{"t": c["ts"].date().isoformat(), "o": c["o"], "h": c["h"], "l": c["l"], "c": c["c"]} for c in rows]
-        rows = self.day_data(date)["stocks"].get(sym) if past else self.intra.get(sym)
-        if rows is None and not past and hasattr(self.prov, "quotes"):
-            now = self.prov.now()
+        if broker and sess != self.prov.now().date():
+            past = True                                     # before today's first trade: the last session's candles
+        rows = self.day_data(sess)["stocks"].get(sym) if past else self.intra.get(sym)
+        if rows is None and not past and broker:
             rows = self.prov.intraday([sym]).get(sym, [])
         rows = rows or []
         out, bucket = [], None
@@ -583,15 +932,152 @@ class Store:
                 out.append(bucket)
             else:
                 bucket["h"], bucket["l"], bucket["c"], bucket["v"] = max(bucket["h"], c["h"]), min(bucket["l"], c["l"]), c["c"], bucket["v"] + c["v"]
+        emap = self.ema_map(sym, sess) if out else {}
+        for b in out:
+            t = dt.datetime.fromisoformat(b["t"])
+            e = emap.get(t.replace(hour=9, minute=15, second=0, microsecond=0) + b["i"] * FIVE_MIN)
+            b["e"] = round(e, 2) if e is not None else None
         return [{k: v for k, v in b.items() if k != "i"} for b in out]
 
+    # ---- 20 EMA buy setup on 5-minute candles ----
+    def _c5_refresh(self):
+        """Download 5-minute candles for the latest session. A download already under way is not duplicated."""
+        if not self.c5_lock.acquire(blocking=False):
+            return
+        try:
+            stamp = self.prov.now()
+            data = self.prov.candles5(self.syms)
+            if data:
+                self.c5l, self.c5_err = (time.time(), stamp, data), None
+            else:
+                self.c5_err = "no 5-minute candles returned"
+        except Exception as e:
+            self.c5_err = repr(e)
+        finally:
+            self.c5_lock.release()
+
+    def _c5_stale(self):
+        if self.c5l is None:
+            return True
+        fetched, stamp, _ = self.c5l
+        if hasattr(self.prov, "quotes"):        # rate-limited broker: once per finished candle; live quotes fill in between
+            now = self.prov.now()
+            return bucket5(now) > bucket5(stamp) and now - bucket5(now) >= dt.timedelta(seconds=3)
+        return time.time() - fetched > (10 if self.prov.name == "mock" else 60)
+
+    def _c5_past(self, day):
+        with self.c5day_lock:
+            if day not in self.c5days:
+                data = self.prov.candles5(self.syms, day)
+                if not any(any(c["ts"].date() == day for c in rows) for rows in data.values()):
+                    raise LookupError(f"no 5-minute candles for {day.isoformat()} (weekend, holiday, or older than about 60 days)")
+                self.c5days[day] = data
+                for old in sorted(self.c5days)[:-5]:
+                    self.c5days.pop(old, None)
+            return self.c5days[day]
+
+    def _c5_live(self):
+        """(market time, {symbol: rows}) for the latest session. Brokers get the forming candle from live quotes."""
+        if self._c5_stale():
+            if self.c5l is None and not hasattr(self.prov, "quotes"):
+                self._c5_refresh()                  # Yahoo and mock: one quick download, wait for it the first time
+            else:
+                threading.Thread(target=self._c5_refresh, daemon=True).start()
+        if self.c5l is None:
+            if hasattr(self.prov, "logged_in") and not self.prov.logged_in():
+                raise LoginNeeded("Log in to Fyers to load market data")
+            raise Loading("Loading 5-minute candles for the 20 EMA scan" + (" (about a minute at the broker's rate limit)" if hasattr(self.prov, "quotes") else "")
+                          + (f". Last error: {self.c5_err}" if self.c5_err else ""))
+        now, data = self.prov.now(), self.c5l[2]
+        if hasattr(self.prov, "quotes") and OPEN <= now.time() < CLOSE:
+            try:
+                data = self._with_ticks(data, self.prov.quotes(self.syms), now)
+            except Exception:
+                pass
+        return now, data
+
+    def _with_ticks(self, data, quotes, now):
+        """Add the forming 5-minute candle from live quotes (high and low as seen by this server since the candle began)."""
+        b, out = bucket5(now), {}
+        for s, rows in data.items():
+            q = quotes.get(s)
+            if not q or not rows or rows[-1]["ts"] < b - FIVE_MIN or rows[-1]["ts"].date() != b.date():
+                out[s] = rows                        # no quote, or the download is too old to join on
+                continue
+            px, t = q["ltp"], self.ticks.get(s)
+            if not t or t["ts"] != b:
+                t = {"ts": b, "o": px, "h": px, "l": px, "c": px, "v": 0}
+            t = dict(t, h=max(t["h"], px), l=min(t["l"], px), c=px)
+            if rows[-1]["ts"] == b:                  # the download already has part of this candle
+                r = rows[-1]
+                t = dict(t, o=r["o"], h=max(t["h"], r["h"]), l=min(t["l"], r["l"]))
+                rows = rows[:-1]
+            self.ticks[s] = t
+            out[s] = rows + [t]
+        return out
+
+    def ema_scan(self, date=None, hold=False, close_break=False, color_signal=False):
+        """Stocks with a 20 EMA buy or sell setup (see ema_setup.py) on the latest session or a past day.
+        Options apply to both sides: hold = the pullback candle (bearish for buys, bullish for sells) stays on its side of
+        the EMA, close_break = the break needs a close beyond its high/low, color_signal = the EMA-cross candle is green
+        for buys, red for sells."""
+        past = date is not None and date != self.latest_session()
+        if past:
+            data = self._c5_past(date)
+            day, now = date, dt.datetime.combine(date, CLOSE, tzinfo=IST)
+        else:
+            now, data = self._c5_live()
+            day = max((r[-1]["ts"].date() for r in data.values() if r), default=now.date())
+        out, last = [], None
+        for s in self.syms:
+            rows = [c for c in data.get(s) or [] if c["ts"].date() <= day]
+            if not rows or rows[-1]["ts"].date() != day:
+                continue
+            e = ema([c["c"] for c in rows])
+            n_closed = sum(1 for c in rows if c["ts"] + FIVE_MIN <= now)
+            closed_today = [c for c in rows[:n_closed] if c["ts"].date() == day]
+            if closed_today:
+                last = max(last or closed_today[-1]["ts"], closed_today[-1]["ts"])
+            found = [dict(x, side="buy") for x in buy_setups(rows, e, day, n_closed, hold, close_break, color_signal)] + \
+                    [dict(x, side="sell") for x in sell_setups(rows, e, day, n_closed, hold, close_break, color_signal)]
+            if not found:
+                continue
+
+            def bar(i):
+                return {"t": rows[i]["ts"].isoformat(), "o": rows[i]["o"], "h": rows[i]["h"], "l": rows[i]["l"], "c": rows[i]["c"],
+                        "ema": round(e[i], 2) if e[i] is not None else None}
+            m = self.meta[s]
+            out.append({"symbol": s, "sector": m["sector"], "ltp": rows[-1]["c"], "ema": round(e[-1], 2) if e[-1] is not None else None,
+                        # pull: the pullback candle (bearish for buys, bullish for sells); level: its high (buys) or low (sells)
+                        "setups": [{"side": x["side"], "status": x["status"], "live": x["live"], "signal": bar(x["signal"]), "pull": bar(x["bear"]),
+                                    "level": rows[x["bear"]]["h" if x["side"] == "buy" else "l"],
+                                    "at": bar(x["at"]) if x["at"] is not None else None} for x in found]})
+        return {"session": day.isoformat(), "past": past, "time": now.isoformat(),
+                "lastCandle": last.isoformat() if last else None, "ema": 20, "tf": "5m", "stocks": out,
+                "rules": {"hold": hold, "close_break": close_break, "color_signal": color_signal},
+                "error": None if past else self.c5_err}
+
+    def ema_map(self, sym, day):
+        """{5-minute candle start: 20 EMA} for one stock from data already downloaded (nothing is downloaded here)."""
+        data = self.c5days.get(day) or (self.c5l[2] if self.c5l else {})
+        rows = [c for c in data.get(sym) or [] if c["ts"].date() <= day]
+        return {c["ts"]: v for c, v in zip(rows, ema([c["c"] for c in rows])) if v is not None and c["ts"].date() == day}
+
     def health(self):
-        sess = self.session_date().isoformat() if self.intra else None
-        return {"provider": self.prov.name, "now": self.prov.now().isoformat(), "symbols_expected": len(self.syms), "symbols_daily": len(self.daily),
-                "symbols_intraday": len(self.intra), "session_date": sess, "last_error": self.err,
-                "intraday_age_s": round(time.time() - self.intra_at, 1) if self.intra_at else None,
-                "missing": [s for s in self.syms if s not in self.daily][:20],
-                "sector_indices": f"{sum(1 for t in self.index_tickers if self.idx.get(t))}/{len(self.index_tickers)}", "index_error": self.idx_err}
+        try:
+            sess = self.latest_session().isoformat() if (self.intra or hasattr(self.prov, "quotes")) else None
+        except Exception:
+            sess = None
+        own = getattr(self, "idx_daily", {}) if self.own_idx else self.idx
+        out = {"provider": self.prov.name, "now": self.prov.now().isoformat(), "symbols_expected": len(self.syms), "symbols_daily": len(self.daily),
+               "symbols_intraday": len(self.intra), "session_date": sess, "last_error": self.err,
+               "intraday_age_s": round(time.time() - self.intra_at, 1) if self.intra_at else None,
+               "missing": [s for s in self.syms if s not in self.daily][:20],
+               "sector_indices": f"{sum(1 for t in self.index_tickers if own.get(t))}/{len(self.index_tickers)}", "index_error": self.idx_err}
+        if hasattr(self.prov, "logged_in"):
+            out["logged_in"] = self.prov.logged_in()
+            out["login_url"] = "/fyers/login"
+        return out
 
 
 # --------------------------------------------------------------------------
@@ -626,6 +1112,8 @@ def make_handler(store, app_path):
                     return self._send(200, html.encode(), "text/html")
                 if u.path == "/health":
                     return self._send(200, store.health())
+                if u.path.startswith("/fyers/"):
+                    return self._fyers(u.path, q)
                 date = None
                 if q.get("date"):
                     try:
@@ -644,6 +1132,12 @@ def make_handler(store, app_path):
                         return self._send(200, store.snapshot(at, date))
                     except LookupError as e:
                         return self._send(404, {"error": str(e)})
+                if u.path == "/ema":
+                    flag = lambda k: q.get(k) in ("1", "true")
+                    try:
+                        return self._send(200, store.ema_scan(date, flag("hold"), flag("close_break"), flag("color")))
+                    except LookupError as e:
+                        return self._send(404, {"error": str(e)})
                 if u.path == "/candles":
                     try:
                         rows = store.candles(q.get("symbol", ""), q.get("tf", "5m"), date)
@@ -651,14 +1145,50 @@ def make_handler(store, app_path):
                         return self._send(404, {"error": str(e)})
                     return self._send(404, {"error": "unknown symbol"}) if rows is None else self._send(200, rows)
                 self._send(404, {"error": "not found"})
+            except LoginNeeded as e:
+                self._send(401, {"error": str(e), "login": "/fyers/login"})
+            except Loading as e:
+                self._send(503, {"error": str(e), "loading": True})
             except Exception as e:
                 self._send(500, {"error": repr(e)})
+
+        def _page(self, title, msg, home=True):
+            html = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>" + title +
+                    "</title><body style='font:16px system-ui;max-width:520px;margin:15vh auto;padding:0 16px;color:#1a212c;background:#f2f5f9'><h2>" +
+                    title + "</h2><p>" + msg + "</p>" + ("<p><a href='/'>Back to the scanner</a></p>" if home else "") + "</body>")
+            self._send(200, html.encode(), "text/html")
+
+        def _fyers(self, path, q):
+            prov = store.prov
+            if not hasattr(prov, "auth_url"):
+                return self._send(404, {"error": "the server is not running with --provider fyers"})
+            if path == "/fyers/login":                     # off to Fyers' own login page; credentials never pass through here
+                self.send_response(302)
+                self.send_header("Location", prov.auth_url())
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                return
+            if path == "/fyers/callback":
+                if q.get("s") == "error" or not q.get("auth_code"):
+                    return self._page("Fyers login failed", "Fyers did not send a login code. <a href='/fyers/login'>Try again</a>.")
+                try:
+                    prov.finish_login(q["auth_code"], q.get("state"))
+                except Exception as e:
+                    import html as h
+                    return self._page("Fyers login failed", h.escape(str(e)) + " <a href='/fyers/login'>Try again</a>.")
+                store.err = None
+                threading.Thread(target=store.refresh, kwargs={"force": True}, daemon=True).start()
+                self.send_response(302)                    # logged in: straight back to the app
+                self.send_header("Location", "/")
+                self.end_headers()
+                return
+            self._send(404, {"error": "not found"})
     return H
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--provider", choices=["mock", "yahoo", "kite"], default="yahoo")
+    ap.add_argument("--provider", choices=["mock", "yahoo", "kite", "fyers"], default="yahoo")
     ap.add_argument("--host", default="127.0.0.1", help="use 0.0.0.0 to open it from your phone on the same Wi-Fi")
     ap.add_argument("--port", type=int, default=8787)
     ap.add_argument("--refresh", type=float, default=15, help="seconds between data refreshes")
@@ -672,22 +1202,49 @@ def main():
     if a.provider != "mock" and not a.no_live_list:
         uni, msg = sync_universe(uni)
         print(f"[universe] {msg}", flush=True)
-    prov = MockProvider(uni, a.mock_time, a.mock_speed) if a.provider == "mock" else YahooProvider(uni) if a.provider == "yahoo" else KiteProvider(uni)
+    if a.provider == "mock":
+        prov = MockProvider(uni, a.mock_time, a.mock_speed)
+    elif a.provider == "yahoo":
+        prov = YahooProvider(uni)
+    elif a.provider == "kite":
+        prov = KiteProvider(uni)
+    else:
+        prov = FyersProvider(uni, a.port)
     sectors, failed = load_sectors(uni, offline=a.provider == "mock" or a.no_live_list)
     print(f"[sectors] {len(sectors)} sectors" + (f"; stock lists from cache for {failed}" if failed else ""), flush=True)
     store = Store(prov, uni, a.refresh, sectors)
-    print(f"[{a.provider}] loading {len(uni)} symbols ...", flush=True)
-    store.refresh(force=True)
-    h = store.health()
-    print(f"[{a.provider}] daily {h['symbols_daily']}, intraday {h['symbols_intraday']}, sector indices {h['sector_indices']}, session {h['session_date']}, error {h['last_error']}", flush=True)
+    background = a.provider == "fyers"          # about a minute of downloads at Fyers' rate limit: serve the app (and its login) meanwhile
+    if background:
+        login = "" if prov.logged_in() else f"  ->  log in first: http://localhost:{a.port}/fyers/login"
+        print(f"[fyers] loading {len(uni)} symbols in the background{login}", flush=True)
+    else:
+        print(f"[{a.provider}] loading {len(uni)} symbols ...", flush=True)
+        store.refresh(force=True)
+        h = store.health()
+        print(f"[{a.provider}] daily {h['symbols_daily']}, intraday {h['symbols_intraday']}, sector indices {h['sector_indices']}, session {h['session_date']}, error {h['last_error']}", flush=True)
 
     def loop():
+        first = background
         while True:
-            time.sleep(a.refresh)
+            if not first:
+                time.sleep(a.refresh)
+            first = False
             store.refresh()
+            if background and store.daily and not getattr(store, "_told", False):
+                store._told = True
+                print(f"[fyers] ready: daily {len(store.daily)}, error {store.err}", flush=True)
     threading.Thread(target=loop, daemon=True).start()
+    if a.provider == "fyers":
+        threading.Thread(target=store.scan_clock, daemon=True).start()
 
-    srv = ThreadingHTTPServer((a.host, a.port), make_handler(store, a.app))
+    # Windows lets a second server bind the same port and the old one keeps answering, so refuse to start instead
+    ThreadingHTTPServer.allow_reuse_address = os.name != "nt"
+    try:
+        srv = ThreadingHTTPServer((a.host, a.port), make_handler(store, a.app))
+    except OSError as e:
+        raise SystemExit(f"Port {a.port} is already in use ({e}). Another copy of server.py is probably still running: "
+                         f"stop it (Task Manager, or: Get-NetTCPConnection -LocalPort {a.port} -State Listen | "
+                         f"% {{ Stop-Process -Id $_.OwningProcess }}) and start again, or use --port.")
     print(f"Open  http://{'localhost' if a.host == '127.0.0.1' else a.host}:{a.port}/   (health: /health)", flush=True)
     try:
         srv.serve_forever()

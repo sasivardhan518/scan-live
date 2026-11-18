@@ -292,6 +292,17 @@ canvas{width:100%;height:300px;display:block;touch-action:pan-y}
 canvas.short{height:220px}
 .readout{min-height:18px;font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:6px}
 
+/* ---------- 20 EMA setup ---------- */
+.steps{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1}
+.step{display:grid;grid-template-columns:18px 64px 44px 1fr;gap:8px;align-items:center;font-size:12.5px;line-height:18px}
+.step i{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--surface3);color:var(--muted);font:700 10px/1 var(--mono);font-style:normal}
+.step.ok i{background:var(--up-soft);color:var(--up)} .step.bear i{background:var(--down-soft);color:var(--down)} .step.wait i{background:var(--accent-soft);color:var(--accent)}
+.step em{font-style:normal;color:var(--muted)}
+.step>span:last-child{color:var(--text2);min-width:0;overflow-wrap:anywhere}
+.livetag{font:600 9.5px/1 var(--sans);text-transform:uppercase;letter-spacing:.06em;padding:3px 5px;border-radius:4px;background:var(--accent-soft);color:var(--accent);margin-left:6px;vertical-align:1px}
+.rules{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.hitno{font:600 10px/1 var(--mono);padding:3px 6px;border-radius:999px;background:var(--surface3);color:var(--text2);margin-left:8px;vertical-align:3px;letter-spacing:0}
+
 /* ---------- settings ---------- */
 .settings{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));align-items:start}
 .sgroup{padding:16px}
@@ -355,6 +366,7 @@ details.dev summary{cursor:pointer;padding:6px 0}
   <nav class="tabs" role="tablist" aria-label="Views">
     <button role="tab" data-tab="heat" aria-selected="true"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="10" rx="2"/><rect x="13" y="3" width="8" height="6" rx="2"/><rect x="13" y="11" width="8" height="10" rx="2"/><rect x="3" y="15" width="8" height="6" rx="2"/></svg><span>Heatmap</span></button>
     <button role="tab" data-tab="short" aria-selected="false"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h9M4 12h9M4 18h6"/><path d="M15 17l2.5 2.5L22 15"/></svg><span>Shortlist</span><span class="badge" id="shortCount" hidden></span></button>
+    <button role="tab" data-tab="ema" aria-selected="false"><svg class="i" viewBox="0 0 24 24"><path d="M3 17c4-1 6-9 10-9 3 0 4 3 8 2"/><path d="M7 13v6M11 9v7M15 7v5M19 6v6"/></svg><span>EMA 20</span><span class="badge" id="emaCount" hidden></span></button>
     <button role="tab" data-tab="chart" aria-selected="false"><svg class="i" viewBox="0 0 24 24"><path d="M6 3v4M6 17v4M18 3v3M18 15v6M12 6v3M12 19v2"/><rect x="4" y="7" width="4" height="10" rx="1"/><rect x="16" y="6" width="4" height="9" rx="1"/><rect x="10" y="9" width="4" height="10" rx="1"/></svg><span>Chart</span></button>
     <button role="tab" data-tab="set" aria-selected="false"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg><span>Settings</span></button>
   </nav>
@@ -395,7 +407,10 @@ const DEFAULT_CFG = {
   weighting: 'cap',   // 'cap' or 'equal'
   mode: 'demo',       // 'demo' or 'live'
   endpoint: 'http://localhost:8787',
-  pollSec: 5
+  pollSec: 5,
+  emaBearHold: false,   // 20 EMA setup: the bearish candle must also stay above the EMA
+  emaCloseBreak: false, // 20 EMA setup: breakout needs a close above the bearish high (default: the high crossing it)
+  emaGreen: false       // 20 EMA setup: the signal candle must be green
 };
 
 const OPEN_MIN = 9 * 60 + 15;   // 09:15
@@ -574,7 +589,8 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     cfg: loadCfg(), mkt: null, bymap: new Map(), qmap: new Map(), simMin: 5, playing: true,
     quotes: [], snap: null, locked: false, lockPending: false, scan: null,
     tab: 'heat', sector: null, view: 'lock', side: 'buy', sym: null, nearOpen: false,
-    liveErr: null, liveMin: 0, session: null, secLive: null, secSnap: null, lockGen: 0, date: null, dateGen: 0, sessions: null, polling: false, dateMsg: null, timers: [], chartBuilt: false, cc: {}
+    liveErr: null, liveMin: 0, session: null, secLive: null, secSnap: null, lockGen: 0, date: null, dateGen: 0, sessions: null, polling: false, dateMsg: null, timers: [], chartBuilt: false, cc: {},
+    ema: null, emaErr: null, emaLoading: null, emaPolling: false, emaGen: 0, emaView: 'triggered', emaSide: 'buy'
   };
 
   // ---------- time ----------
@@ -607,7 +623,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
   function setDate(d) {
     const latest = S.sessions && S.sessions.default;
     S.date = d && d !== latest ? d : null;
-    S.dateGen++; clearLock(); S.cc = {}; S.quotes = []; S.scan = null; S.secLive = null; S.session = null; S.liveErr = null; S.chartBuilt = false; S.polling = false;
+    S.dateGen++; clearLock(); S.cc = {}; S.quotes = []; S.scan = null; S.secLive = null; S.session = null; S.liveErr = null; S.chartBuilt = false; S.polling = false; resetEma();
     render(true); pollLive();
   }
 
@@ -618,7 +634,10 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
       const r = await fetch(S.endpointBase() + '/snapshot' + dq('?'), { cache: 'no-store' });
       const d = await r.json().catch(() => ({}));
       if (gen !== S.dateGen) return;           // the date changed while this was loading
+      S.loginUrl = r.status === 401 && d.login ? S.endpointBase() + d.login : null;     // broker wants its daily login
+      S.loadingMsg = r.status === 503 && d.loading ? d.error : null;                    // first download still running
       if (!r.ok) { const e = new Error(d.error || 'HTTP ' + r.status); e.noData = r.status === 404; throw e; }
+      if (!S.sessions) loadSessions();                                                   // trading days arrive after a broker login
       if (S.sessions && d.session && !S.date && d.session !== S.sessions.default) loadSessions();   // a new trading day started
       if (d.session && S.session && d.session !== S.session) { clearLock(); S.cc = {}; }
       S.session = d.session || null;
@@ -630,7 +649,31 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     } catch (e) { if (gen !== S.dateGen) return; S.liveErr = String(e && e.message || e); S.noData = !!e.noData; }
     finally { if (gen === S.dateGen) S.polling = false; }
     update(); render();
+    if (S.tab === 'ema' || (S.tab === 'chart' && S.ema)) pollEma();
   }
+
+  // 20 EMA buy setups on 5-minute candles (computed by the server; polled only while the EMA tab or chart is open)
+  const emaQuery = () => '?hold=' + (S.cfg.emaBearHold ? 1 : 0) + '&close_break=' + (S.cfg.emaCloseBreak ? 1 : 0) + '&color=' + (S.cfg.emaGreen ? 1 : 0) + dq('&');
+  async function pollEma() {
+    if (isDemo() || S.emaPolling) return;
+    S.emaPolling = true; const gen = S.emaGen;
+    try {
+      const r = await fetch(S.endpointBase() + '/ema' + emaQuery(), { cache: 'no-store' });
+      const d = await r.json().catch(() => ({}));
+      if (gen !== S.emaGen) return;
+      S.emaLoading = r.status === 503 && d.loading ? d.error : null;
+      if (r.status === 401 && d.login) S.loginUrl = S.endpointBase() + d.login;
+      if (r.status === 404 && d.error === 'not found') throw new Error('The data server is running an older version without the EMA 20 scan. Stop it (Ctrl+C) and start server.py again.');
+      if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+      // a server started before sell setups existed sends buy setups only, without `side`, and calls the pullback `bear`
+      d.oldServer = (d.stocks || []).some(st => st.setups.some(x => !x.side));
+      (d.stocks || []).forEach(st => st.setups.forEach(x => { if (!x.side) x.side = 'buy'; if (!x.pull) x.pull = x.bear; }));
+      S.ema = d; S.emaErr = null;
+    } catch (e) { if (gen === S.emaGen) S.emaErr = String(e && e.message || e); }
+    finally { if (gen === S.emaGen) S.emaPolling = false; }
+    if (gen === S.emaGen && (S.tab === 'ema' || S.tab === 'chart')) render();
+  }
+  function resetEma() { S.ema = null; S.emaErr = null; S.emaLoading = null; S.emaPolling = false; S.emaGen++; }
 
   async function lockLiveAtScan() {
     if (S.lockPending) return; S.lockPending = true;
@@ -673,7 +716,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     $('#transport').style.display = demo ? '' : 'none';
     $('#modeTag').textContent = demo ? 'DEMO' : 'LIVE';
     $('#modeTag').classList.toggle('live', !demo);
-    S.cc = {}; clearLock(); S.lockPending = false; S.secLive = null; S.session = null; S.sector = null; S.sym = null; S.chartBuilt = false;
+    S.cc = {}; clearLock(); S.lockPending = false; S.secLive = null; S.session = null; S.sector = null; S.sym = null; S.chartBuilt = false; resetEma();
     if (demo) {
       if (!S.mkt) newMarket(7);
       S.timers.push(setInterval(() => { if (S.playing && S.simMin < SESSION_MIN) { S.simMin++; $('#slider').value = S.simMin; update(); render(); } }, +$('#speedSel').value));
@@ -708,6 +751,8 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
   }
 
   function waitingHtml() {
+    if (!isDemo() && S.loginUrl) return '<div class="empty">' + ico('lock') + '<b>' + esc(S.liveErr || 'Log in to your broker') + '</b><p>Fyers asks for one login each day. You sign in on Fyers’ own page, then come straight back here.</p><a class="btn" style="margin-top:8px;text-decoration:none;color:var(--text)" href="' + esc(S.loginUrl) + '">Log in to Fyers</a></div>';
+    if (!isDemo() && S.loadingMsg) return '<div class="empty"><div class="spin"></div><b>' + esc(S.loadingMsg) + '</b></div>';
     if (!isDemo() && S.noData) return '<div class="empty">' + ico('inbox') + '<b>No market data for ' + esc(fmtDay(S.date)) + '</b><p>' + esc(S.liveErr) + '. Pick another day, or press Latest.</p></div>';
     if (!isDemo() && S.liveErr) return '<div class="empty">' + ico('alert') + '<div class="err">Cannot reach ' + esc(S.endpointBase()) + '</div><p>' + esc(S.liveErr) + '. Live mode calls a data server you run yourself. Browsers block hosted pages from reaching a local server, so open the downloaded app file on your own computer, or switch to Demo in Settings.</p></div>';
     return '<div class="empty"><div class="spin"></div><b>Waiting for the first market snapshot…</b></div>';
@@ -841,6 +886,79 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     morph(m, banner + seg + list + near);
   }
 
+  // ---------- 20 EMA setup ----------
+  const istMin = iso => Math.floor((Date.parse(iso) / 60000 + 330) % 1440);
+  const hm = iso => iso ? fmtClock(istMin(iso)) : '—';
+  const hm5 = iso => { const x = istMin(iso); return fmtClock(x - x % 5); };
+  const emaLtp = st => { const q = S.qmap.get(st.symbol); return q ? q.ltp : st.ltp; };
+
+  // for one side: every break of the day (a stock can hit several times, each is its own card, numbered in time order),
+  // and every setup still waiting for its break
+  function emaLists(side) {
+    const trig = [], watch = [], stocks = new Set();
+    (S.ema ? S.ema.stocks : []).forEach(st => {
+      const mine = st.setups.filter(x => x.side === side);
+      const t = mine.filter(x => x.status === 'triggered').sort((a, b) => Date.parse(a.at.t) - Date.parse(b.at.t));
+      t.forEach((x, i) => trig.push({ st, x, n: i + 1, of: t.length }));
+      if (t.length) stocks.add(st.symbol);
+      mine.filter(x => x.status === 'pending').forEach(x => watch.push({ st, x }));
+    });
+    trig.sort((a, b) => Date.parse(b.x.at.t) - Date.parse(a.x.at.t) || a.st.symbol.localeCompare(b.st.symbol));
+    const away = o => Math.abs(o.x.level / emaLtp(o.st) - 1);
+    watch.sort((a, b) => away(a) - away(b));
+    return { trig, watch, stocks: stocks.size };
+  }
+
+  function emaCard(o) {
+    const st = o.st, x = o.x, q = S.qmap.get(st.symbol), ltp = emaLtp(st), trig = x.status === 'triggered', buy = x.side === 'buy', sg = buy ? 1 : -1;
+    const vsEma = st.ema ? (ltp / st.ema - 1) * 100 : null, away = (x.level / ltp - 1) * 100 * sg, since = (ltp / x.level - 1) * 100 * sg;
+    const step = (c, n, name, t, txt) => '<span class="step ' + c + '"><i>' + n + '</i><em>' + name + '</em><span class="num">' + t + '</span><span>' + txt + '</span></span>';
+    const brk = (S.cfg.emaCloseBreak ? 'Closed ' : 'Broke ') + (buy ? 'above ' : 'below ');
+    return '<button class="card ' + x.side + '" data-sym="' + esc(st.symbol) + '">' +
+      '<span class="ch"><span><span class="sym">' + esc(st.symbol) + (o.of > 1 ? '<span class="hitno">Hit ' + o.n + ' of ' + o.of + '</span>' : '') + '</span><span class="sec">' + esc(st.sector) + '</span></span>' +
+      '<span class="px"><span class="ltp">' + fmtPx(ltp) + '</span>' + (q ? '<span class="chg ' + cls(q.chg) + '">' + fmtPct(q.chg) + '</span>' : '') + '</span></span>' +
+      '<span class="cb"><span class="steps">' +
+      step('ok', '1', 'EMA cross', hm(x.signal.t), 'EMA <span class="num">' + fmtPx(x.signal.ema) + '</span> in body') +
+      step(buy ? 'bear' : 'ok', '2', buy ? 'Bearish' : 'Bullish', hm(x.pull.t), (buy ? 'High' : 'Low') + ' <span class="num">' + fmtPx(x.level) + '</span> · ' + (buy ? 'L' : 'H') + ' <span class="num">' + fmtPx(buy ? x.pull.l : x.pull.h) + '</span>') +
+      (trig ? step('ok', '3', buy ? 'Breakout' : 'Breakdown', hm(x.at.t), brk + '<span class="num">' + fmtPx(x.level) + '</span>' + (x.live ? '<span class="livetag">forming</span>' : ''))
+        : step('wait', '3', buy ? 'Breakout' : 'Breakdown', '—', 'Needs ' + (buy ? 'above' : 'below') + ' <span class="num">' + fmtPx(x.level) + '</span>' + (away > 0 ? ' · <span class="num">' + away.toFixed(2) + '%</span> away' : ''))) +
+      '</span></span>' +
+      '<span class="cf"><span>' + (trig ? (buy ? 'Since breakout' : 'Since breakdown') + ' <span class="num ' + cls(since) + '">' + fmtPct(since) + '</span>' : (buy ? 'Above EMA since the bearish candle' : 'Below EMA since the bullish candle')) + '</span>' +
+      '<span class="num">EMA ' + (st.ema ? fmtPx(st.ema) : '—') + (vsEma != null ? ' · <span class="' + cls(vsEma) + '">' + fmtPct(vsEma) + '</span>' : '') + '</span></span></button>';
+  }
+
+  function renderEma() {
+    const m = $('#main');
+    if (isDemo()) { morph(m, '<div class="empty">' + ico('pulse') + '<b>The EMA 20 screen needs the data server</b><p>It scans 5-minute candles on the server. Run <span class="num">python server.py --provider yahoo</span> (or <span class="num">--provider mock</span> for a simulated market) and open <span class="num">http://localhost:8787/</span>.</p></div>'); return; }
+    if (!S.ema) {
+      if (S.loginUrl) { morph(m, waitingHtml()); return; }
+      if (S.emaErr && !S.emaLoading) { morph(m, '<div class="empty">' + ico('alert') + '<div class="err">Could not run the 20 EMA scan</div><p>' + esc(S.emaErr) + '</p></div>'); return; }
+      morph(m, '<div class="empty"><div class="spin"></div><b>' + esc(S.emaLoading || 'Scanning 5-minute candles…') + '</b></div>'); return;
+    }
+    const buy = S.emaSide !== 'sell', side = buy ? 'buy' : 'sell', LB = emaLists('buy'), LS = emaLists('sell'), L = buy ? LB : LS;
+    const d = S.ema, trigView = S.emaView !== 'watch', list = trigView ? L.trig : L.watch;
+    const pull = buy ? 'bearish' : 'bullish', edge = buy ? 'high' : 'low';
+    const dayTag = d.past ? ' · ' + esc(fmtDay(d.session)) : '';
+    const rules = '<div class="rules"><span class="pl">Rules</span>' +
+      '<span class="chip">' + (S.cfg.emaCloseBreak ? 'Close ' + (buy ? 'above' : 'below') + ' ' + pull + ' ' + edge : (buy ? 'High crosses' : 'Low crosses') + ' ' + pull + ' ' + edge) + '</span>' +
+      '<span class="chip">' + (S.cfg.emaBearHold ? (buy ? 'Whole bearish candle above EMA' : 'Whole bullish candle below EMA') : (buy ? 'Bearish body above EMA, wick may touch' : 'Bullish body below EMA, wick may touch')) + '</span>' +
+      (S.cfg.emaGreen ? '<span class="chip">' + (buy ? 'Green' : 'Red') + ' signal candle</span>' : '') + '</div>';
+    const banner = '<section class="summary live"><div class="st"><span class="sti">' + ico('pulse') + '</span><div><b>' + (buy ? 'Buy' : 'Sell') + ' setups · 20 EMA · 5-min' + dayTag + '</b><p>' +
+      (d.lastCandle ? 'Last closed candle ' + hm(d.lastCandle) + (d.past ? ' · session closed' : ' · rescans every few seconds') : 'No closed 5-minute candle yet') +
+      (d.error ? ' · <span class="err">' + esc(d.error) + ' (showing the last good data)</span>' : '') +
+      (d.oldServer ? '<br><span class="err">The data server is an older version that finds buy setups only. Stop it (Ctrl+C) and start server.py again to get sell setups.</span>' : '') +
+      '</p></div></div><div class="sp">' + rules + '</div></section>';
+    const sides = '<div class="seg lg" role="group" aria-label="Side"><button class="buy" data-emaside="buy" aria-pressed="' + buy + '">Buy <span class="cnt">' + LB.trig.length + '</span></button>' +
+      '<button class="sell" data-emaside="sell" aria-pressed="' + !buy + '">Sell <span class="cnt">' + LS.trig.length + '</span></button></div>';
+    const stages = '<div class="seg" role="group" aria-label="Setup stage"><button data-emaview="trig" aria-pressed="' + trigView + '">Triggered <span class="cnt">' + L.trig.length + '</span></button>' +
+      '<button data-emaview="watch" aria-pressed="' + !trigView + '">Watching <span class="cnt">' + L.watch.length + '</span></button></div>';
+    const how = buy ? 'EMA inside a candle body → a bearish candle within the next two, its body above the EMA → a later candle breaks the bearish high with no candle touching the EMA in between.'
+      : 'EMA inside a candle body → a bullish candle within the next two, its body below the EMA → a later candle breaks the bullish low with no candle touching the EMA in between.';
+    const seg = '<div class="sidebar">' + sides + stages + '<span class="hint">' + (trigView ? L.trig.length + ' ' + (buy ? 'breakouts' : 'breakdowns') + ' in ' + L.stocks + ' stocks, newest first; a stock can hit more than once a day.' : 'Waiting for a break of the ' + pull + ' ' + edge + ', closest first.') + ' ' + how + '</span></div>';
+    const empty = '<div class="empty">' + ico('inbox') + '<b>' + (trigView ? 'No stock has triggered the ' + side + ' setup' + (d.past ? ' that day.' : ' yet today.') : 'No ' + side + ' setup is waiting for a break.') + '</b><p>Tap a card to open its chart with the EMA line. Rule options are in Settings.</p></div>';
+    morph(m, banner + seg + (list.length ? '<div class="cards">' + list.map(emaCard).join('') + '</div>' : empty));
+  }
+
   // ---------- charts ----------
   const col = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
@@ -852,6 +970,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     const padL = 6, padR = 62, padT = 8, padB = 20, pw = W - padL - padR, ph = H - padT - padB;
     if (!c.length) { g.fillStyle = C.muted; g.font = '13px sans-serif'; g.fillText('No candles yet', 12, 24); cv._info = null; return; }
     let lo = Infinity, hi = -Infinity; c.forEach(d => { lo = Math.min(lo, d.l); hi = Math.max(hi, d.h); });
+    (o.series || []).forEach(s => s.vals.forEach(v => { if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }));
     const ext = Math.max((hi - lo) * 0.6, last0(c) * 0.004);
     const inr = l => l.y > 0 && l.y >= lo - ext && l.y <= hi + ext;
     (o.lines || []).forEach(l => { if (inr(l)) { lo = Math.min(lo, l.y); hi = Math.max(hi, l.y); } });
@@ -877,6 +996,17 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
       g.beginPath(); g.moveTo(Math.round(x) + .5, Y(d.h)); g.lineTo(Math.round(x) + .5, Y(d.l)); g.stroke();
       const yt = Y(Math.max(d.o, d.c)), yb = Y(Math.min(d.o, d.c)); g.fillRect(x - bw / 2, yt, bw, Math.max(1, yb - yt));
     });
+    (o.series || []).forEach(s => {
+      g.strokeStyle = s.color; g.lineWidth = 1.6; g.beginPath(); let on = false;
+      s.vals.forEach((v, i) => { if (v == null) { on = false; return; } const x = padL + step * (i + .5); on ? g.lineTo(x, Y(v)) : g.moveTo(x, Y(v)); on = true; });
+      g.stroke(); g.lineWidth = 1;
+    });
+    g.font = '600 10px "JetBrains Mono",monospace'; g.textAlign = 'center';
+    (o.marks || []).forEach(k => {
+      const d = c[k.i]; if (!d) return; const x = padL + step * (k.i + .5); g.fillStyle = k.color;
+      if (k.below) { g.textBaseline = 'top'; g.fillText(k.text, x, Y(d.l) + 3); } else { g.textBaseline = 'bottom'; g.fillText(k.text, x, Y(d.h) - 3); }
+    });
+    g.font = '11px "JetBrains Mono",monospace';
     const last = c[c.length - 1], ly = Y(last.c);
     g.fillStyle = C.accent; g.fillRect(W - padR + 1, ly - 8, padR - 2, 16);
     g.fillStyle = col('--accent-ink'); g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(fmtPx(last.c), W - padR + 4, ly);
@@ -942,10 +1072,21 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
       const pd = q.prevDay, sm = scanMin();
       const slots = Math.max(24, Math.min(75, intr.length + 6)), every = slots > 40 ? 12 : 6;
       const xl = []; for (let i = 0; i < slots; i += every) xl.push([i, fmtClock(OPEN_MIN + i * 5)]);
-      drawCandles($('#cv5'), intr, { slots, xlabels: xl, labelOf: i => fmtClock(OPEN_MIN + i * 5), vIndex: sm / 5, vLabel: S.cfg.scanTime + ' scan', hiIndex: null, lines: [
+      // 20 EMA (from the server, warmed up on earlier days) and this stock's live setups: S = EMA cross, P = pullback candle, ▲/▼ = break
+      const ev = intr.map(c => c.e == null ? null : c.e), est = S.ema && S.ema.stocks.find(x => x.symbol === sym), marks = [];
+      const at = iso => intr.findIndex(c => hm5(c.t) === hm5(iso));
+      const hitNo = { buy: 0, sell: 0 }, live = (est ? est.setups : []).filter(x => x.status !== 'failed');
+      live.forEach(x => {
+        const buy = x.side === 'buy';      // buy: P (bearish pullback) above its candle, ▲ under the breakout; sell: mirrored
+        marks.push({ i: at(x.signal.t), text: 'S', color: col('--accent'), below: buy }, { i: at(x.pull.t), text: 'P', color: col(buy ? '--down' : '--up'), below: !buy });
+        const many = live.filter(y => y.side === x.side && y.status === 'triggered').length > 1;   // number the hits when a side has several
+        if (x.at) marks.push({ i: at(x.at.t), text: (buy ? '▲' : '▼') + (many ? ++hitNo[x.side] : ''), color: col(buy ? '--up' : '--down'), below: buy });
+      });
+      drawCandles($('#cv5'), intr, { slots, xlabels: xl, labelOf: i => fmtClock(OPEN_MIN + i * 5) + (ev[i] != null ? '  EMA ' + fmtPx(ev[i]) : ''), vIndex: sm / 5, vLabel: S.cfg.scanTime + ' scan', hiIndex: null,
+        series: ev.some(v => v != null) ? [{ vals: ev, color: col('--accent') }] : [], marks, lines: [
         { y: q.prevClose, label: 'Prev close', color: col('--muted'), dash: [5, 4] }, { y: pd.h, label: 'Prev day high', color: col('--accent'), dash: [1, 4] }, { y: pd.l, label: 'Prev day low', color: col('--accent'), dash: [1, 4] }] });
       $('#t5').textContent = '5-min · ' + (S.date ? fmtDay(S.date) : 'today');
-      $('#ic').textContent = intr.length ? intr.length + ' candles · ' + fmtClock(OPEN_MIN + Math.min(nowMin(), SESSION_MIN)) : '';
+      $('#ic').textContent = intr.length ? intr.length + ' candles · ' + fmtClock(OPEN_MIN + Math.min(nowMin(), SESSION_MIN)) + (ev.some(v => v != null) ? ' · amber line: 20 EMA' + (marks.length ? ' · S EMA cross, P pullback candle, ▲ breakout, ▼ breakdown' : '') : '') : '';
       let dates = isDemo() ? tradingDates(daily.length) : daily.map(d => new Date(d.t));
       const dl = []; for (let i = 0; i < daily.length; i += 6) dl.push([i, dFmt(dates[i])]);
       drawCandles($('#cv1d'), daily, { xlabels: dl, hiIndex: daily.length - 1, labelOf: i => dFmt(dates[i]), lines: [] });
@@ -956,7 +1097,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
   // ---------- settings ----------
   const GROUPS = [
     ['c1', 'Confirmation 1', 'Sector strength'], ['c2', 'Confirmation 2', 'Nifty 200 rank'], ['c3', 'Confirmation 3', 'Previous-day wick'],
-    ['c4', 'Confirmation 4', 'First 5-min candle'], ['scan', 'Scan', 'When the shortlist locks'], ['data', 'Data', 'Where prices come from'], ['look', 'Appearance', 'Theme']
+    ['c4', 'Confirmation 4', 'First 5-min candle'], ['ema', 'EMA 20 screen', 'Buy and sell setups on 5-min candles'], ['scan', 'Scan', 'When the shortlist locks'], ['data', 'Data', 'Where prices come from'], ['look', 'Appearance', 'Theme']
   ];
   const FIELDS = [
     { g: 'c1', k: 'topSectors', t: 'number', step: 1, min: 1, max: 10, label: 'Top sectors per side', hint: 'Strongest sectors for buys, weakest for sells.' },
@@ -967,6 +1108,9 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     { g: 'c3', k: 'wickMode', t: 'select', label: 'Wick rule', opts: [['pct', 'Longer wick AND at least the % of range below'], ['longer', 'Longer wick only (ignore % of range)']], hint: 'Buy: lower wick > upper wick. Sell: upper wick > lower wick.' },
     { g: 'c3', k: 'wickPct', t: 'number', step: 5, min: 5, max: 95, label: 'Wick size (% of the day’s range)', hint: 'Used only with the first wick rule.' },
     { g: 'c4', k: 'firstCandle', t: 'checkbox', label: 'Require the first 5-min candle', hint: 'The 09:15–09:20 candle must be green for buys and red for sells.' },
+    { g: 'ema', k: 'emaCloseBreak', t: 'checkbox', label: 'The break needs a close beyond the pullback candle', hint: 'Buy: close above the bearish candle’s high. Sell: close below the bullish candle’s low. Off: the high (buy) or low (sell) crossing it is enough.' },
+    { g: 'ema', k: 'emaBearHold', t: 'checkbox', label: 'Pullback candle’s wick must also clear the EMA', hint: 'Its body must always stay clear of the EMA (above it for buys, below it for sells). On: the wick may not touch it either. Off: the wick may touch or cross the EMA.' },
+    { g: 'ema', k: 'emaGreen', t: 'checkbox', label: 'EMA-cross candle must point the trade’s way', hint: 'Green for buys, red for sells. Off: any candle whose body contains the EMA counts.' },
     { g: 'scan', k: 'scanTime', t: 'time', label: 'Scan time (IST)', hint: 'Shortlist locks at this time.' },
     { g: 'scan', k: 'autoScan', t: 'checkbox', label: 'Lock the shortlist automatically', hint: 'Takes the snapshot as soon as the market reaches the scan time.' },
     { g: 'look', k: 'theme', t: 'theme' },
@@ -1022,8 +1166,9 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     morph($('#viewSeg'), '<button data-view="live" aria-pressed="' + !viewLock() + '">Live</button><button data-view="lock" aria-pressed="' + viewLock() + '"' +
       (S.locked && S.snap ? '' : ' disabled title="Available once the market reaches ' + esc(S.cfg.scanTime) + '"') + '>@ ' + esc(S.cfg.scanTime) + '</button>');
     const sc = S.scan, sb = $('#shortCount'); sb.textContent = sc ? sc.buy.passed.length + sc.sell.passed.length : ''; sb.hidden = !sc;
+    const eb = $('#emaCount'); eb.textContent = S.ema ? emaLists('buy').trig.length + emaLists('sell').trig.length : ''; eb.hidden = !S.ema;
     if (S.tab === 'set') { renderSettings(); return; }
-    ({ heat: renderHeat, short: renderShort, chart: renderChart })[S.tab]();
+    ({ heat: renderHeat, short: renderShort, ema: renderEma, chart: renderChart })[S.tab]();
   }
 
   function setTab(t) {
@@ -1031,6 +1176,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     document.querySelectorAll('nav.tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
     $('#main').scrollTop = 0;
     render(true);
+    if (t === 'ema') pollEma();
   }
 
   // ---------- events ----------
@@ -1038,6 +1184,8 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     const tab = e.target.closest('nav.tabs button'); if (tab) { setTab(tab.dataset.tab); return; }
     const vw = e.target.closest('[data-view]'); if (vw) { S.view = vw.dataset.view; update(); render(true); return; }
     const side = e.target.closest('[data-side]'); if (side) { S.side = side.dataset.side; render(); return; }
+    const ev = e.target.closest('[data-emaview]'); if (ev) { S.emaView = ev.dataset.emaview; render(); return; }
+    const es = e.target.closest('[data-emaside]'); if (es) { S.emaSide = es.dataset.emaside; render(); return; }
     const sec = e.target.closest('[data-sector]');
     if (sec) { S.sector = sec.dataset.sector; if (S.tab !== 'heat') setTab('heat'); else render(); return; }
     const sym = e.target.closest('[data-sym]');
@@ -1076,6 +1224,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     if (has('theme')) applyTheme();
     if (has('mode') || has('endpoint') || has('pollSec')) { restartLoops(); return; }
     if (has('scanTime') || has('autoScan')) clearLock();          // the old snapshot belongs to the old scan time
+    if (has('emaBearHold') || has('emaCloseBreak') || has('emaGreen')) { resetEma(); pollEma(); }
     update(); render(true);
   }
   window.addEventListener('storage', e => {
