@@ -178,7 +178,7 @@
 
   function paint() {
     const board = $('#isBoard', root), top = $('#isTop', root);
-    if (!BASE) { top.innerHTML = '<section class="is-box"><b>The Strategy-PD-H/L tab needs the data server.</b><div class="is-sub">Start <span class="num">python server.py</span> and open http://localhost:8787/.</div></section>'; board.innerHTML = ''; return; }
+    if (!BASE) { top.innerHTML = '<section class="is-box"><b>The Strategy-PD-H/L tab needs the data server.</b><div class="is-sub">Start <span class="num">python server.py</span> and open http://localhost:8080/.</div></section>'; board.innerHTML = ''; return; }
     if (!D) { top.innerHTML = '<section class="is-box"><div class="spin"></div>' + (err ? '<div class="is-err">' + esc(err) + '</div>' : 'Loading the scanner…') + '</section>'; return; }
     if (D.off || D.loading) {
       top.innerHTML = '<section class="is-box">' + (D.off ? '<b>Scanner is off</b>' : '<div class="spin"></div><b>Starting the scanner</b><div class="is-sub">Loading F&amp;O lot sizes and the first Yahoo download (about a minute).</div>') +

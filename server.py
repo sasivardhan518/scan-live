@@ -414,7 +414,7 @@ class FyersProvider:
     index_key = "fyers"            # sectors.json field with this provider's index symbol
     QUOTE_TTL = 5                  # seconds a quote stays fresh (Fyers allows 200 calls a minute in all)
 
-    def __init__(self, universe, port=8787):
+    def __init__(self, universe, port=8080):
         import collections, secrets
         cfg = {}
         path = os.path.join(HERE, "fyers.json")
@@ -1302,8 +1302,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--provider", choices=["auto", "mock", "yahoo", "kite", "fyers"], default="yahoo",
                     help="auto = Fyers when logged in, Yahoo otherwise (needs fyers.json; without it, Yahoo only)")
-    ap.add_argument("--host", default="127.0.0.1", help="use 0.0.0.0 to open it from your phone on the same Wi-Fi")
-    ap.add_argument("--port", type=int, default=8787)
+    ap.add_argument("--host", default=os.environ.get("HOST", "127.0.0.1"), help="use 0.0.0.0 to open it from your phone on the same Wi-Fi")
+    ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8080)))
     ap.add_argument("--refresh", type=float, default=15, help="seconds between data refreshes")
     ap.add_argument("--mock-time", default="09:19:30", help="mock provider: pretend it is this time when the server starts")
     ap.add_argument("--mock-speed", type=float, default=1.0, help="mock provider: clock speed (60 = one minute per second)")

@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: scanner-920
+    runtime: python
+    plan: free
+    buildCommand: pip install yfinance pandas
+    startCommand: python -u server.py --provider yahoo --host 0.0.0.0
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.13

@@ -461,7 +461,7 @@ const DEFAULT_CFG = {
   autoScan: true,
   weighting: 'cap',   // 'cap' or 'equal'
   mode: 'demo',       // 'demo' or 'live'
-  endpoint: 'http://localhost:8787',
+  endpoint: 'http://localhost:8080',
   pollSec: 5,
   emaBearHold: false,   // 20 EMA setup: the bearish candle must also stay above the EMA
   emaCloseBreak: false, // 20 EMA setup: breakout needs a close above the bearish high (default: the high crossing it)
@@ -1095,7 +1095,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
 
   function renderEma() {
     const m = $('#main');
-    if (isDemo()) { morph(m, '<div class="empty">' + ico('pulse') + '<b>The EMA 20 screen needs the data server</b><p>It scans 5-minute candles on the server. Run <span class="num">python server.py --provider yahoo</span> (or <span class="num">--provider mock</span> for a simulated market) and open <span class="num">http://localhost:8787/</span>.</p></div>'); return; }
+    if (isDemo()) { morph(m, '<div class="empty">' + ico('pulse') + '<b>The EMA 20 screen needs the data server</b><p>It scans 5-minute candles on the server. Run <span class="num">python server.py --provider yahoo</span> (or <span class="num">--provider mock</span> for a simulated market) and open <span class="num">http://localhost:8080/</span>.</p></div>'); return; }
     if (!S.ema) {
       if (S.loginUrl) { morph(m, waitingHtml()); return; }
       if (S.emaErr && !S.emaLoading) { morph(m, '<div class="empty">' + ico('alert') + '<div class="err">Could not run the 20 EMA scan</div><p>' + esc(S.emaErr) + '</p></div>'); return; }
@@ -1346,7 +1346,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     if (S.tab === 'set') { renderSettings(); return; }
     if (S.tab === 'scan') {                 // Intraday Scanner tab: self-contained, see intraday/ui/scanner.js
       if (window.IntradayScanner) window.IntradayScanner.render($('#main'));
-      else morph($('#main'), '<div class="empty"><b>The Strategy-PD-H/L tab needs the data server.</b><p>Start python server.py and open http://localhost:8787/.</p></div>');
+      else morph($('#main'), '<div class="empty"><b>The Strategy-PD-H/L tab needs the data server.</b><p>Start python server.py and open http://localhost:8080/.</p></div>');
       return;
     }
     ({ heat: renderHeat, short: renderShort, ema: renderEma, chart: renderChart })[S.tab]();

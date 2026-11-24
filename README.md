@@ -3,9 +3,9 @@
 Needs Python 3.9+. From this folder:
 
     pip install -r requirements.txt
-    python server.py --provider auto           # Fyers when logged in, Yahoo otherwise (recommended)
-    python server.py --provider yahoo          # Yahoo only: free, no account
-    # then open http://localhost:8787/
+    python -u server.py --provider auto           # Fyers when logged in, Yahoo otherwise (recommended)
+    python -u server.py --provider yahoo          # Yahoo only: free, no account
+    # then open http://localhost:8080/
 
 ## Providers
 - `auto`   Fyers when you are logged in, Yahoo until then. Needs `fyers.json` (setup below); without it, runs on Yahoo only.
@@ -20,14 +20,14 @@ Needs Python 3.9+. From this folder:
 - `mock`   Synthetic market for testing: `python server.py --provider mock --mock-time 09:19:30`
 
 ## Fyers setup (once)
-1. Sign in at https://myapi.fyers.in/ and create an app. Set its Redirect URL to exactly `http://127.0.0.1:8787/fyers/callback`
+1. Sign in at https://myapi.fyers.in/ and create an app. Set its Redirect URL to exactly `http://127.0.0.1:8080/fyers/callback`
    (use your port if you run with `--port`). Note the App ID (looks like `XXXXXXXX-100`) and the Secret ID.
 2. Create `fyers.json` in this folder (it is git-ignored, keep it private):
 
        {"app_id": "XXXXXXXX-100", "secret_key": "YOUR_SECRET_ID"}
 
    or set the environment variables `FYERS_APP_ID` and `FYERS_SECRET_KEY` instead.
-3. `python server.py --provider auto` (or `--provider fyers` for Fyers only), open http://localhost:8787/ and press **Log in to Fyers**. You sign in on Fyers'
+3. `python server.py --provider auto` (or `--provider fyers` for Fyers only), open http://localhost:8080/ and press **Log in to Fyers**. You sign in on Fyers'
    own page and come straight back. Do this once each trading day (Fyers tokens last one day; the token is saved in the
    git-ignored `fyers_token.json`, so a restart the same day needs no new login).
 
@@ -43,7 +43,7 @@ How it uses Fyers:
 
 ## Use it on your phone
     python server.py --provider yahoo --host 0.0.0.0
-Open `http://<your-computer-ip>:8787/` on the same Wi-Fi. There is no password, so use it on a trusted network only.
+Open `http://<your-computer-ip>:8080/` on the same Wi-Fi. There is no password, so use it on a trusted network only.
 
 ## EMA 20 screen (buy and sell setups on 5-minute candles)
 The **EMA 20** tab lists stocks where, today:
