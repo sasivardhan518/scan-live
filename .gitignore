@@ -1,3 +1,6 @@
 fyers.json
 fyers_token.json
 __pycache__/
+intraday/settings.json
+intraday/journal/
+intraday/lot_sizes.json

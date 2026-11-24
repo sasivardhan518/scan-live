@@ -67,11 +67,62 @@ rescans every minute. Fyers and Kite fetch them once per finished candle (about 
 limit), and live quotes fill in the forming candle, so a breakout shows within seconds. The mock market has only today, so
 its EMA starts at 09:15. The screen needs the data server; it does not run in the browser-only demo.
 
+## Strategy-PD-H/L tab (Intraday Scanner: PDH/PDL breakout + inside candle, 5-minute)
+**Educational tool, not financial advice.** Signals and alerts only: it never places an order.
+
+Data: Yahoo only (polled every 30 s; Yahoo's NSE data can lag your broker). Stocks: NSE F&O stocks, with lot sizes from
+NSE's lot-size file (cached in `intraday/lot_sizes.json`; if NSE is unreachable it falls back to the Nifty 200 list).
+Yahoo has **no open interest and no pre-open data**, so the OI leaders and OI tags show "OI n/a", and you type the
+pre-open advances/declines into the Market bias box. Nothing is ever guessed.
+
+Rules (closed candles for setups, live price for triggers):
+- Ignore 09:15-09:30. **Long**: a candle closes above the previous day's high, then a red candle fully inside the
+  candle before it (equal highs/lows count) with lower volume (equal or missing volume does not). Entry = price goes above
+  that candle's high, stop = below its low. **Short**: the mirror (close below PDL, green inside candle).
+- A newer inside candle re-arms with new levels; a close back through PDH/PDL, or the stop before entry, invalidates it.
+- Exit: a candle closes beyond the 10 EMA, then price breaks that candle's low (long) / high (short). Stop-loss always.
+  1:2 and 1:3 targets are shown for reference. 15:15 square-off warning; no new setups after 15:15.
+
+States: Watching → Breakout confirmed → Armed (setup formed) → Approaching entry → Entry triggered → In trade →
+Approaching exit → Exit signal → Closed / Invalidated. Cards are sorted by urgency (approaching exit and entry first).
+Colours: green long, red short, amber approaching entry, blue in trade, purple approaching exit, grey watching/done,
+always with an icon and a text label. New alerts flash the card, show a toast, can beep, and can send browser
+notifications (toggles in the Alerts box); the alert log keeps the times.
+
+Risk: set capital, daily risk % (default 1%) and trades per day. Quantity = risk per trade ÷ (entry − stop), rounded
+down to whole lots. Use **Mark taken** / **Mark exited** on a card to track the day's P&L; a **STOP TRADING** banner
+shows when the realised loss reaches the daily limit. Saved in `intraday/settings.json` and `intraday/journal/`
+(both git-ignored).
+
+Settings: every threshold is in `intraday/config.json` (proximity % and ticks for "approaching", EMA period, targets,
+square-off time, re-entry, watchlist rules, poll interval). Restart the server after editing it.
+
+Run modes (`--scanner`):
+
+    python server.py --provider auto                          # Scanner tab on live Yahoo data (the default)
+    python server.py --scanner replay-mock --scanner-speed 60 # scripted MOCK day that walks through every state
+    python server.py --scanner replay-yahoo:2026-11-17        # replay a real past day from Yahoo (last ~60 days)
+    python -m intraday.record 2026-11-17 day.csv              # record a day, then:
+    python server.py --scanner replay-csv:day.csv             # replay the recording
+    python server.py --scanner off                            # no scanner
+
+Replays run a clock from 09:15 (`--scanner-from 10:00` to start later); inside each candle the price path is
+approximated from its open, high, low and close, and the board says so.
+
+Tests: `python -m unittest discover -s tests` (engine, state machine, aggregator, sizing, and a full MOCK replay).
+
+## Search
+The search panel beside the heatmap (above it on a phone) finds stocks by NSE symbol, company name or sector (`tata`, `infosys`, `psu bank`, several words narrow it).
+Each result shows the stock's price and change, and a chip for every sector index it belongs to, with that sector's change and
+rank. Outlined chips are the day's picked sectors; BUY / SELL marks stocks passing all confirmations. Tap a chip to open that sector in
+the heatmap next to it, or a row for the chart. Company names come from `GET /universe`.
+
 ## Endpoints
 - `GET /snapshot`            current quotes for all stocks
 - `GET /snapshot?at=09:20`   quotes as of that time today (the app uses this to lock the 9:20 shortlist, even if you open it later)
 - `GET /candles?symbol=X&tf=5m|1d`
 - `GET /ema`                 20 EMA buy and sell setups (options `hold=1`, `close_break=1`, `color=1`); the 5-minute `/candles` rows carry the EMA as `e`
+- `GET /scanner/state`, `POST /scanner/action`   Intraday Scanner tab (see intraday/web.py)
 - `GET /sessions`            trading days the app can show (latest first) and the default day
 - Add `&date=YYYY-MM-DD` to `/snapshot` and `/candles` for a past session. Past days use 5-minute candles (Yahoo keeps about 60 days); the latest session uses 1-minute candles.
 - `GET /health`              provider status, symbols loaded, last error

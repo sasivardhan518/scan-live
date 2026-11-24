@@ -1,0 +1,53 @@
+{
+  "_help": "Intraday Scanner settings. Every threshold the scanner uses lives here. Restart the server after editing (the risk inputs can also be changed on the Scanner tab).",
+
+  "candle_minutes": 5,
+  "market_open": "09:15",
+  "market_close": "15:30",
+  "pre_open": "09:00",
+  "skip_first_candles": 3,
+  "ema_period": 10,
+  "tick_size": 0.05,
+  "entry_buffer_ticks": 0,
+
+  "approach_entry_pct": 0.25,
+  "approach_entry_ticks": 10,
+  "approach_exit_pct": 0.25,
+  "approach_exit_ticks": 10,
+
+  "targets_r": [2, 3],
+  "square_off_warning": "15:15",
+  "allow_reentry": true,
+  "max_trades_per_stock": 2,
+
+  "risk": {
+    "capital": 500000,
+    "daily_risk_pct": 1.0,
+    "trades_per_day": 3
+  },
+
+  "bias": {
+    "long_if_adv_dec_ratio_at_least": 1.5,
+    "short_if_adv_dec_ratio_at_most": 0.67
+  },
+
+  "watchlist": {
+    "range_bound_max_ratio": 0.8,
+    "range_lookback_days": 10,
+    "not_extended_max_pct_from_sma": 1.5,
+    "sma_days": 20,
+    "manual_symbols": []
+  },
+
+  "feed": {
+    "poll_seconds": 30,
+    "closed_candle_grace_seconds": 60,
+    "lot_sizes_url": "https://nsearchives.nseindia.com/content/fo/fo_mktlots.csv"
+  },
+
+  "ui": {
+    "sound": true,
+    "browser_notifications": false,
+    "flash_seconds": 8
+  }
+}

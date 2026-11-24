@@ -23,7 +23,7 @@
   --text:#eef2f7; --text2:#c6cfdb; --muted:#929eb0;
   --accent:#f5b84a; --accent-soft:rgba(245,184,74,.15); --accent-ink:#241a04;
   --up:#1fe08a; --up-soft:rgba(31,224,138,.16); --down:#ff4d5e; --down-soft:rgba(255,77,94,.16);
-  --heat-n:52,62,77; --heat-up:0,200,105; --heat-down:240,44,62;
+  --heat-n:52,62,77; --heat-up-l:134,232,168; --heat-up:14,98,52; --heat-down-l:250,168,168; --heat-down:150,24,32;
   --pick-ring:rgba(255,255,255,.95); --glow:rgba(245,184,74,.06); --shadow:0 6px 20px rgba(0,0,0,.18); --nav:rgba(34,42,55,.94);
   color-scheme:dark;
 }
@@ -34,7 +34,7 @@
   --text:#152030; --text2:#3a475a; --muted:#68758a;
   --accent:#4f5bd5; --accent-soft:rgba(79,91,213,.11); --accent-ink:#ffffff;
   --up:#00a650; --up-soft:rgba(0,166,80,.12); --down:#e5162e; --down-soft:rgba(229,22,46,.10);
-  --heat-n:228,233,240; --heat-up:0,184,86; --heat-down:236,32,56;
+  --heat-n:228,233,240; --heat-up-l:134,232,168; --heat-up:14,98,52; --heat-down-l:250,168,168; --heat-down:150,24,32;
   --pick-ring:#152030; --glow:rgba(79,91,213,.05); --shadow:0 4px 14px rgba(21,32,48,.07); --nav:rgba(255,255,255,.94);
   color-scheme:light;
 }
@@ -45,7 +45,7 @@
   --text:#2b2419; --text2:#4f4636; --muted:#857a66;
   --accent:#0e8585; --accent-soft:rgba(14,133,133,.11); --accent-ink:#ffffff;
   --up:#0f9a4a; --up-soft:rgba(15,154,74,.13); --down:#d92b2b; --down-soft:rgba(217,43,43,.11);
-  --heat-n:236,228,214; --heat-up:10,170,80; --heat-down:226,40,40;
+  --heat-n:236,228,214; --heat-up-l:134,232,168; --heat-up:14,98,52; --heat-down-l:250,168,168; --heat-down:150,24,32;
   --pick-ring:#2b2419; --glow:rgba(14,133,133,.04); --shadow:0 4px 14px rgba(70,50,20,.07); --nav:rgba(255,252,246,.94);
   color-scheme:light;
 }
@@ -56,7 +56,7 @@
   --text:#ecf4fc; --text2:#c0d3e6; --muted:#8fa8c2;
   --accent:#5ad6c8; --accent-soft:rgba(90,214,200,.15); --accent-ink:#06231f;
   --up:#2bf09a; --up-soft:rgba(43,240,154,.16); --down:#ff5a6e; --down-soft:rgba(255,90,110,.16);
-  --heat-n:42,68,98; --heat-up:0,206,120; --heat-down:246,52,78;
+  --heat-n:42,68,98; --heat-up-l:134,232,168; --heat-up:14,98,52; --heat-down-l:250,168,168; --heat-down:150,24,32;
   --pick-ring:rgba(255,255,255,.95); --glow:rgba(90,214,200,.07); --shadow:0 6px 20px rgba(0,10,25,.2); --nav:rgba(28,52,81,.94);
   color-scheme:dark;
 }
@@ -74,7 +74,7 @@ svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .hint{font-size:12px;color:var(--muted)}
 
 /* ---------- shell ---------- */
-#app{height:100%;display:flex;flex-direction:column;max-width:1240px;margin:0 auto}
+#app{height:100%;display:flex;flex-direction:column;margin:0 auto}
 header{order:0;display:flex;align-items:center;gap:14px;padding:12px 20px;flex-wrap:wrap;row-gap:10px}
 .brand{display:flex;align-items:center;gap:10px;white-space:nowrap}
 .logo{display:grid;place-items:center;height:32px;padding:0 8px;border-radius:9px;background:var(--accent);color:var(--accent-ink);font:700 13px/1 var(--mono);letter-spacing:-.02em}
@@ -103,6 +103,18 @@ header{order:0;display:flex;align-items:center;gap:14px;padding:12px 20px;flex-w
 .pill.wait{color:var(--accent);background:var(--accent-soft)}
 .pill.lock{color:var(--text);background:var(--surface3)}
 .pill.lock svg{color:var(--accent)}
+.niftybar{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;padding:10px 14px;margin-bottom:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;font-size:12.5px}
+.niftybar .nb-name{font-weight:700;letter-spacing:.02em}
+.niftybar .nb-when{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);background:var(--surface3);padding:3px 7px;border-radius:999px}
+.niftybar .nb-val{font-size:16px;font-weight:600}
+.niftybar .nb-chg{font-weight:600}
+.niftybar .nb-tag{font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;background:var(--surface3)}
+.niftybar .nb-tag.up{background:var(--up-soft)} .niftybar .nb-tag.down{background:var(--down-soft)}
+.niftybar .nb-sep{width:1px;height:16px;background:var(--line2);margin:0 4px}
+.pill.tpick{padding:4px 6px 4px 11px;cursor:pointer}
+.pill.tpick:focus-within{box-shadow:0 0 0 2px var(--accent)}
+.pill.tpick input{background:var(--bg);border:1px solid var(--line2);border-radius:999px;outline:none;color:var(--text);font:600 12.5px var(--mono);padding:4px 8px;color-scheme:inherit;cursor:pointer;width:92px}
+.pill.tpick input:hover{border-color:var(--accent)}
 
 nav.tabs{order:3;display:flex;background:var(--nav);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:4px 6px calc(4px + env(safe-area-inset-bottom))}
 nav.tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;background:none;border:0;border-radius:10px;color:var(--muted);font-size:11.5px;font-weight:500;position:relative}
@@ -172,7 +184,7 @@ button.crumb:hover{color:var(--text)}
 .crumb.on{color:var(--text)}
 .crumbs .sep{color:var(--line2);font-size:15px}
 .legend{margin-left:auto;display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
-.legend .bar{width:140px;height:6px;border-radius:3px;background:linear-gradient(90deg,rgb(var(--heat-down)),rgb(var(--heat-n)) 50%,rgb(var(--heat-up)))}
+.legend .bar{width:140px;height:6px;border-radius:3px;background:linear-gradient(90deg,rgb(var(--heat-down)),rgb(var(--heat-down-l)) 45%,rgb(var(--heat-n)) 50%,rgb(var(--heat-up-l)) 55%,rgb(var(--heat-up)))}
 .heatgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
 .heatgrid.stocks{grid-template-columns:repeat(auto-fill,minmax(128px,1fr))}
 .heatgrid>.empty{grid-column:1/-1}
@@ -183,6 +195,11 @@ button.crumb:hover{color:var(--text)}
 .tile .t1{font-weight:600;font-size:12.5px;letter-spacing:.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tile .t2{font:700 19px/1.1 var(--mono);letter-spacing:-.02em;margin-top:auto}
 .tile .t3{font:500 11px/1 var(--mono);opacity:.8}
+.tile .t3{display:flex;align-items:center;gap:6px}
+.tile .fo{font:700 9px/1 var(--sans);letter-spacing:.05em;padding:3px 5px;border-radius:4px;background:rgba(10,14,20,.55);color:#fff;text-shadow:none;opacity:1}
+.tile .fo.no{background:transparent;box-shadow:inset 0 0 0 1px currentColor;color:inherit;opacity:.7;font-weight:600}
+.tile.ink-dark .fo{background:rgba(255,255,255,.8);color:#152030}
+.tile.ink-dark .fo.no{background:transparent;color:inherit}
 .tile .rk{font:600 10px/1 var(--mono);opacity:.55;padding-top:2px}
 .tile .bdg{flex:none;font:700 9.5px/1 var(--mono);letter-spacing:.04em;padding:4px 6px;border-radius:5px;background:rgba(10,14,20,.6);color:#fff;white-space:nowrap;text-shadow:none}
 .tile.ink-dark .bdg{background:rgba(255,255,255,.75);color:#152030}
@@ -293,6 +310,37 @@ canvas{width:100%;height:300px;display:block;touch-action:pan-y}
 canvas.short{height:220px}
 .readout{min-height:18px;font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:6px}
 
+/* ---------- stock search (side panel on the heatmap tab) ---------- */
+.heatlay{display:grid;grid-template-columns:minmax(0,1fr) clamp(340px,26vw,440px);gap:16px;align-items:start}
+.findside{position:sticky;top:0;max-height:calc(100vh - 150px);display:flex;flex-direction:column;overflow:hidden;margin-top:0}
+.findside .fhd{padding:12px 12px 10px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.findside .fhd .search{width:100%}
+.findside .fhd .frow2{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.findside .flist{overflow-y:auto;flex:1;scrollbar-color:var(--line2) transparent}
+.findside .flist>.empty{margin:12px;padding:20px 12px}
+.findside .frow{grid-template-columns:1fr auto;padding:9px 12px;gap:6px 10px}
+.findside .frow .secs{grid-column:1/-1;grid-row:2}
+.findside .fnote{padding:8px 12px;border-top:1px solid var(--line);margin:0}
+@media (max-width:1000px){.heatlay{grid-template-columns:1fr}.findside{position:static;max-height:none;order:-1}.findside .flist{max-height:340px}.findside.idle .flist,.findside.idle .fnote{display:none}}
+.search.wide{flex:1;min-width:200px;max-width:520px}
+.search.wide input{width:100%;text-transform:none;font-family:inherit}
+.search .clr{background:none;border:0;color:var(--muted);padding:2px;display:grid;place-items:center}
+.frow{display:grid;grid-template-columns:minmax(150px,1.1fr) 2fr auto;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s}
+.frow:last-child{border-bottom:0}.frow:hover{background:var(--hover)}
+.frow .who{min-width:0;display:flex;flex-direction:column;gap:2px}
+.frow .who b{font-family:var(--mono);font-size:14px;display:flex;align-items:center;gap:6px}
+.frow .who small{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.frow .secs{display:flex;flex-wrap:wrap;gap:5px;min-width:0}
+.frow .secs .chip{cursor:pointer;font-size:11.5px;padding:3px 9px}
+.frow .secs .chip:hover{border-color:var(--line2)}
+.frow .secs .chip .num{font-weight:600}
+.frow .secs .chip .rk{color:var(--muted);font-size:10.5px}
+.frow .secs .chip.top{border-color:var(--accent)}
+.frow .px{display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-family:var(--mono);white-space:nowrap}
+.frow .px b{font-weight:600;font-size:13.5px}.frow .px span{font-size:12px}
+.frow mark{background:var(--glow);color:inherit;border-radius:3px;box-shadow:0 0 0 1px var(--accent) inset}
+@media (max-width:640px){.frow{grid-template-columns:1fr auto;padding:10px 12px}.frow .secs{grid-column:1/-1;grid-row:2}}
+
 /* ---------- 20 EMA setup ---------- */
 .steps{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1}
 .step{display:grid;grid-template-columns:18px 64px 44px 1fr;gap:8px;align-items:center;font-size:12.5px;line-height:18px}
@@ -302,6 +350,8 @@ canvas.short{height:220px}
 .step>span:last-child{color:var(--text2);min-width:0;overflow-wrap:anywhere}
 .livetag{font:600 9.5px/1 var(--sans);text-transform:uppercase;letter-spacing:.06em;padding:3px 5px;border-radius:4px;background:var(--accent-soft);color:var(--accent);margin-left:6px;vertical-align:1px}
 .rules{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.sectag{display:inline-block;font:600 10px/1 var(--sans);padding:3px 6px;border-radius:999px;margin-left:6px;vertical-align:1px;white-space:nowrap}
+.sectag.ok{background:var(--up-soft);color:var(--up)} .sectag.bad{background:var(--down-soft);color:var(--down)} .sectag.no{background:var(--surface3);color:var(--muted)}
 .hitno{font:600 10px/1 var(--mono);padding:3px 6px;border-radius:999px;background:var(--surface3);color:var(--text2);margin-left:8px;vertical-align:3px;letter-spacing:0}
 
 /* ---------- settings ---------- */
@@ -343,6 +393,7 @@ details.dev summary{cursor:pointer;padding:6px 0}
 .err{color:var(--down);font-size:13px}
 @media (prefers-reduced-motion:no-preference){.tile{transition:filter .15s}}
 </style>
+<link rel="stylesheet" href="/intraday/ui/scanner.css"><!-- Intraday Scanner tab (intraday/) -->
 </head>
 <body>
 <div id="app">
@@ -353,7 +404,8 @@ details.dev summary{cursor:pointer;padding:6px 0}
     <div class="dgroup" id="dateBox"><label class="datepick" title="Trading day to show"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><input type="date" id="dateIn" aria-label="Trading day"></label><button class="btn sm" id="latestBtn" data-act="latest" hidden>Latest</button></div>
     <div class="hgroup"><span class="hlabel">Prices</span><span class="seg" id="viewSeg" role="group" aria-label="Prices shown on every tab"></span></div>
     <div class="clockbox"><div class="clock" id="clock">09:20</div><div class="sub" id="sessionLbl">IST</div></div>
-    <div class="pill wait" id="status">…</div>
+    <label class="pill wait tpick" id="status" title="Scan time (IST): the heatmap and shortlist lock at this time. Change it here or in Settings.">…</label>
+    <datalist id="scanTimes"><option value="09:20"><option value="09:25"><option value="09:30"><option value="09:45"><option value="10:00"><option value="10:30"><option value="11:00"><option value="12:00"><option value="13:00"><option value="14:00"><option value="15:00"></datalist>
   </header>
   <div class="transport" id="transport">
     <button class="btn sm" id="playBtn" aria-label="Play or pause the demo clock">Pause</button>
@@ -369,6 +421,7 @@ details.dev summary{cursor:pointer;padding:6px 0}
     <button role="tab" data-tab="heat" aria-selected="true"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="10" rx="2"/><rect x="13" y="3" width="8" height="6" rx="2"/><rect x="13" y="11" width="8" height="10" rx="2"/><rect x="3" y="15" width="8" height="6" rx="2"/></svg><span>Heatmap</span></button>
     <button role="tab" data-tab="short" aria-selected="false"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h9M4 12h9M4 18h6"/><path d="M15 17l2.5 2.5L22 15"/></svg><span>Shortlist</span><span class="badge" id="shortCount" hidden></span></button>
     <button role="tab" data-tab="ema" aria-selected="false"><svg class="i" viewBox="0 0 24 24"><path d="M3 17c4-1 6-9 10-9 3 0 4 3 8 2"/><path d="M7 13v6M11 9v7M15 7v5M19 6v6"/></svg><span>EMA 20</span><span class="badge" id="emaCount" hidden></span></button>
+    <button role="tab" data-tab="scan" aria-selected="false"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2M8 11h6M11 8v6"/></svg><span>Strategy-PD-H/L</span><span class="badge" id="scanCount" hidden></span></button>
     <button role="tab" data-tab="chart" aria-selected="false"><svg class="i" viewBox="0 0 24 24"><path d="M6 3v4M6 17v4M18 3v3M18 15v6M12 6v3M12 19v2"/><rect x="4" y="7" width="4" height="10" rx="1"/><rect x="16" y="6" width="4" height="9" rx="1"/><rect x="10" y="9" width="4" height="10" rx="1"/></svg><span>Chart</span></button>
     <button role="tab" data-tab="set" aria-selected="false"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg><span>Settings</span></button>
   </nav>
@@ -592,7 +645,8 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     quotes: [], snap: null, locked: false, lockPending: false, scan: null,
     tab: 'heat', sector: null, view: 'lock', side: 'buy', sym: null, nearOpen: false,
     liveErr: null, liveMin: 0, session: null, secLive: null, secSnap: null, lockGen: 0, date: null, dateGen: 0, sessions: null, polling: false, dateMsg: null, timers: [], chartBuilt: false, cc: {},
-    ema: null, emaErr: null, emaLoading: null, emaPolling: false, emaGen: 0, emaView: 'triggered', emaSide: 'buy'
+    ema: null, emaErr: null, emaLoading: null, emaPolling: false, emaGen: 0, emaView: 'triggered', emaSide: 'buy',
+    find: '', findSort: 'chg', names: null
   };
 
   // ---------- time ----------
@@ -608,7 +662,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
   }
 
   function normLive(arr) {
-    return (arr || []).map(s => ({ symbol: s.symbol, sector: s.sector, weight: s.weight || 1, ltp: s.ltp, prevClose: s.prevClose, open: s.open, high: s.high, low: s.low, chg: (s.ltp / s.prevClose - 1) * 100, prevDay: s.prevDay, first5: s.first5 || null, sectors: s.sectors && s.sectors.length ? s.sectors : [s.sector] }));
+    return (arr || []).map(s => ({ symbol: s.symbol, sector: s.sector, weight: s.weight || 1, ltp: s.ltp, prevClose: s.prevClose, open: s.open, high: s.high, low: s.low, chg: (s.ltp / s.prevClose - 1) * 100, prevDay: s.prevDay, first5: s.first5 || null, fno: s.fno, sectors: s.sectors && s.sectors.length ? s.sectors : [s.sector] }));
   }
   S.endpointBase = () => String(S.cfg.endpoint || '').replace(/\/+$/, '');
   // every request carries the chosen trading day; none = the latest session (today in market hours, else the previous trading day)
@@ -625,7 +679,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
   function setDate(d) {
     const latest = S.sessions && S.sessions.default;
     S.date = d && d !== latest ? d : null;
-    S.dateGen++; clearLock(); S.cc = {}; S.quotes = []; S.scan = null; S.secLive = null; S.session = null; S.liveErr = null; S.chartBuilt = false; S.polling = false; resetEma();
+    S.dateGen++; clearLock(); S.cc = {}; S.quotes = []; S.scan = null; S.secLive = null; S.niftyLive = null; S.session = null; S.liveErr = null; S.chartBuilt = false; S.polling = false; resetEma();
     render(true); pollLive();
   }
 
@@ -646,7 +700,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
       // --provider auto: which source answered (fyers / yahoo), and why it is not Fyers
       if (S.source && d.source && d.source !== S.source) { S.cc = {}; resetEma(); }     // switched source: drop data from the other one
       S.source = d.source || null; S.fyersLogin = d.fyersLogin ? S.endpointBase() + d.fyersLogin : null; S.fyersNote = d.fyersNote || null;
-      S.quotes = normLive(d.stocks); S.secLive = d.sectors || null;
+      S.quotes = normLive(d.stocks); S.secLive = secOnly(d.sectors); S.niftyLive = benchOf(d.sectors);
       const t = Date.parse(d.dataTime || d.time);
       const istMin = Math.floor(((isNaN(t) ? Date.now() : t) / 60000 + 330)) % 1440;
       S.liveMin = istMin - OPEN_MIN;
@@ -688,7 +742,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const d = await r.json();
       if (gen !== S.lockGen) return;                       // scan time or data source changed while this was loading
-      S.snap = normLive(d.stocks); S.secSnap = d.sectors || null; S.locked = true;
+      S.snap = normLive(d.stocks); S.secSnap = secOnly(d.sectors); S.niftySnap = benchOf(d.sectors); S.locked = true;
     } catch (e) { if (gen === S.lockGen) S.liveErr = 'Could not load the ' + S.cfg.scanTime + ' snapshot: ' + (e.message || e) + ' (retrying)'; return; }
     finally { if (gen === S.lockGen) S.lockPending = false; }
     update(); render(true);
@@ -698,7 +752,10 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     if (isDemo()) { S.snap = S.mkt.stocks.map(s => quoteAt(s, Math.max(1, scanMin()))); S.locked = true; }
     else lockLiveAtScan();
   }
-  function clearLock() { S.locked = false; S.snap = null; S.secSnap = null; S.lockPending = false; S.lockGen++; }
+  function clearLock() { S.locked = false; S.snap = null; S.secSnap = null; S.niftySnap = null; S.lockPending = false; S.lockGen++; }
+  // the server sends Nifty 50 in the sector list, marked "bench"
+  const secOnly = a => a ? a.filter(x => !x.bench) : null;
+  const benchOf = a => (a || []).find(x => x.bench && x.value != null) || null;
 
   // Everything on screen reads from these, so the Live / scan-time switch changes every tab at once.
   const viewLock = () => S.view === 'lock' && S.locked && !!S.snap;
@@ -721,7 +778,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     $('#transport').style.display = demo ? '' : 'none';
     $('#modeTag').textContent = demo ? 'DEMO' : 'LIVE';
     $('#modeTag').classList.toggle('live', !demo);
-    S.cc = {}; clearLock(); S.lockPending = false; S.secLive = null; S.session = null; S.sector = null; S.sym = null; S.chartBuilt = false; resetEma();
+    S.cc = {}; clearLock(); S.lockPending = false; S.secLive = null; S.niftyLive = null; S.session = null; S.sector = null; S.sym = null; S.chartBuilt = false; resetEma();
     if (demo) {
       if (!S.mkt) newMarket(7);
       S.timers.push(setInterval(() => { if (S.playing && S.simMin < SESSION_MIN) { S.simMin++; $('#slider').value = S.simMin; update(); render(); } }, +$('#speedSel').value));
@@ -737,9 +794,13 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
   // ---------- heatmap helpers ----------
   const rgbVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).split(',').map(Number);
   let HEAT = null;                                   // theme ramp, read once per render
+  // 0% = neutral; a small move = light green/red; bigger moves darken, deepest at ±HEAT_SCALE% and beyond
   function heatColor(p) {
-    const t = Math.max(-1, Math.min(1, p / HEAT_SCALE)), a = Math.pow(Math.abs(t), 0.6), n = HEAT.n, tgt = t >= 0 ? HEAT.up : HEAT.down;
-    return 'rgb(' + n.map((v, i) => Math.round(v + (tgt[i] - v) * a)).join(',') + ')';
+    const t = Math.min(1, Math.abs(p) / HEAT_SCALE), up = p >= 0, lo = up ? HEAT.upL : HEAT.downL, hi = up ? HEAT.up : HEAT.down;
+    const mix = (x, y, k) => x.map((v, i) => Math.round(v + (y[i] - v) * k));
+    const FLAT = 0.1;                                // the first 0.15% fades in from neutral
+    const c = t < FLAT ? mix(HEAT.n, lo, t / FLAT) : mix(lo, hi, (t - FLAT) / (1 - FLAT));
+    return 'rgb(' + c.join(',') + ')';
   }
   // white text on dark tiles, dark text on light tiles (relative luminance)
   function inkDark(rgb) {
@@ -748,6 +809,9 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
   }
 
   // One equal-size tile. Colour: 0% is the neutral colour; gains shade to green, losses to red, full colour at ±HEAT_SCALE%.
+  // F&O tag: lot size from NSE's list; nothing when the list is not loaded (demo, or NSE unreachable)
+  const foTag = q => q.fno ? '<span class="fo" title="In NSE F&O · lot ' + q.fno + '">F&amp;O</span>' : q.fno === 0 ? '<span class="fo no" title="Not in NSE F&O">Cash</span>' : '';
+
   function flatTile(pct, name, o) {
     const color = heatColor(pct), dk = inkDark(color);
     return '<button class="tile ' + (dk ? 'ink-dark ' : '') + (o.cls || '') + '" style="background:' + color + ';color:' + (dk ? '#152030' : '#fff') + '" ' + o.attr +
@@ -795,6 +859,27 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
   }
 
   // ---------- views ----------
+  // Nifty 50 at the selected scan time (or live), shown above the heatmap
+  function niftyBar() {
+    if (isDemo()) return '';
+    const lock = viewLock(), n = lock ? S.niftySnap : S.niftyLive, live = S.niftyLive;
+    const when = lock ? 'At ' + esc(S.cfg.scanTime) : S.date ? 'Close' : 'Live';
+    if (!n) return '<div class="niftybar"><span class="nb-name">NIFTY 50</span><span class="nb-when">' + when + '</span><span class="muted">' +
+      (S.quotes.length ? 'not available from the data source yet' : 'loading…') + '</span></div>';
+    const pts = n.prevClose ? n.value - n.prevClose : null, c = cls(n.chg);
+    const fmt = v => v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const dirTxt = n.chg > 0.15 ? 'Market up' : n.chg < -0.15 ? 'Market down' : 'Market flat';
+    let since = '';
+    if (lock && live && live.value != null && live !== n) {
+      const d = (live.value / n.value - 1) * 100;
+      since = '<span class="nb-sep"></span><span class="nb-when">Now</span><span class="num">' + fmt(live.value) + '</span><span class="num ' + cls(live.chg) + '">' + fmtPct(live.chg) + '</span>' +
+        '<span class="muted">(' + (d >= 0 ? '+' : '') + d.toFixed(2) + '% since ' + esc(S.cfg.scanTime) + ')</span>';
+    }
+    return '<div class="niftybar" title="Nifty 50 index' + (n.prevClose ? ' · previous close ' + fmt(n.prevClose) : '') + '"><span class="nb-name">NIFTY 50</span><span class="nb-when">' + when + '</span>' +
+      '<span class="nb-val num">' + fmt(n.value) + '</span><span class="nb-chg num ' + c + '">' + (pts != null ? (pts >= 0 ? '+' : '') + fmt(pts) + ' · ' : '') + fmtPct(n.chg) + '</span>' +
+      '<span class="nb-tag ' + c + '">' + dirTxt + '</span>' + since + '</div>';
+  }
+
   function renderHeat() {
     const m = $('#main');
     if (!S.quotes.length) { morph(m, waitingHtml()); return; }
@@ -808,7 +893,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
       (S.sector ? '<span class="sep">/</span><span class="crumb on">' + esc(S.sector) + '</span>' : '') + '</nav>' +
       '<div class="legend" aria-label="Colour scale"><span>−' + HEAT_SCALE + '%</span><div class="bar"></div><span>+' + HEAT_SCALE + '%</span></div></div>';
     let html = '', secHtml = '';
-    HEAT = { n: rgbVar('--heat-n'), up: rgbVar('--heat-up'), down: rgbVar('--heat-down') };
+    HEAT = { n: rgbVar('--heat-n'), up: rgbVar('--heat-up'), down: rgbVar('--heat-down'), upL: rgbVar('--heat-up-l'), downL: rgbVar('--heat-down-l') };
     if (!S.sector) {
       [...secs].sort((a, b) => b.avg - a.avg).forEach((x, i) => {
         const bi = buyP.indexOf(x.name), si = sellP.indexOf(x.name);
@@ -822,7 +907,8 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
       list.forEach((q, i) => {
         const p = pass.get(q.symbol);
         html += flatTile(q.chg, q.symbol, { attr: 'data-sym="' + esc(q.symbol) + '"', rank: i + 1,
-          badge: p === 'B' ? 'BUY' : p === 'S' ? 'SELL' : '', cls: p ? (p === 'B' ? 'pickB' : 'pickS') : '', sub: fmtPx(q.ltp) });
+          badge: p === 'B' ? 'BUY' : p === 'S' ? 'SELL' : '', cls: p ? (p === 'B' ? 'pickB' : 'pickS') : '', sub: fmtPx(q.ltp) + foTag(q),
+          full: q.symbol + (q.fno ? ' · F&O, lot ' + q.fno : q.fno === 0 ? ' · not in F&O' : '') });
       });
       if (!list.length) html = '<div class="empty">' + ico('inbox') + '<b>No Nifty 200 stocks in this sector</b></div>';
     }
@@ -845,7 +931,8 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     const picksHtml = '<div class="pg"><span class="pl">Buy sectors</span>' + (buyP.length ? buyP.map(n => chip(n, 'b')).join('') : '<span class="chip no">none</span>') + '</div>' +
       '<div class="pg"><span class="pl">Sell sectors</span>' + (sellP.length ? sellP.map(n => chip(n, 's')).join('') : '<span class="chip no">none</span>') + '</div>' +
       '<p class="hint">' + (S.sector ? 'Outlined stocks passed all ' + nRules() + ' confirmations. Tap one to open its chart.' : 'Outlined sectors are the top ' + S.cfg.topSectors + ' per side. Tap a sector to drill into its stocks.') + '</p>';
-    morph(m, crumbs + '<div class="heatgrid' + (S.sector ? ' stocks' : '') + '" id="hb">' + html + '</div><div class="pickbar" id="picks">' + picksHtml + '</div><div id="secList">' + secHtml + '</div>');
+    morph(m, '<div class="heatlay"><div class="hmain">' + niftyBar() + crumbs + '<div class="heatgrid' + (S.sector ? ' stocks' : '') + '" id="hb">' + html + '</div><div class="pickbar" id="picks">' + picksHtml + '</div><div id="secList">' + secHtml + '</div></div>' +
+      findPanel(hq, secs) + '</div>');
   }
 
   function glyph(pd) {
@@ -891,8 +978,58 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     morph(m, banner + seg + list + near);
   }
 
+  // ---------- stock search: every stock with the sectors it belongs to ----------
+  async function loadNames() {                    // company names, once per page load (live server only)
+    if (S.names || isDemo()) return;
+    S.names = new Map();
+    try {
+      const r = await fetch(S.endpointBase() + '/universe', { cache: 'no-store' });
+      if (r.ok) { S.names = new Map((await r.json()).map(x => [x.symbol, x])); if (S.tab === 'heat') render(); }
+    } catch (e) { }
+  }
+  const hiMatch = (txt, q) => {                    // highlight the first match of q in txt
+    const s = String(txt || ''), i = q ? s.toLowerCase().indexOf(q) : -1;
+    return i < 0 ? esc(s) : esc(s.slice(0, i)) + '<mark>' + esc(s.slice(i, i + q.length)) + '</mark>' + esc(s.slice(i + q.length));
+  };
+  function findPanel(hq, secs) {
+    loadNames();
+    const secInfo = new Map(secs.map((x, i) => [x.name, { avg: x.avg, rank: i + 1, custom: x.custom }]));
+    const sc = S.scan, pass = new Map(), pickB = sc ? sc.buy.picked : [], pickS = sc ? sc.sell.picked : [];
+    if (sc) { sc.buy.passed.forEach(x => pass.set(x.q.symbol, 'B')); sc.sell.passed.forEach(x => pass.set(x.q.symbol, 'S')); }
+    const q = S.find.trim().toLowerCase(), words = q.split(/\s+/).filter(Boolean);
+    const rows = hq.map(s => {
+      const meta = S.names && S.names.get(s.symbol) || {}, sl = (s.sectors || [s.sector]).filter(n => n);
+      const hay = [s.symbol, meta.name, meta.industry, s.sector, ...sl, ...sl.map(shortName)].join(' | ').toLowerCase();
+      return { s, meta, sl, hay };
+    }).filter(r => words.every(w => r.hay.includes(w)));
+    if (S.findSort === 'az') rows.sort((a, b) => a.s.symbol.localeCompare(b.s.symbol));
+    else rows.sort((a, b) => S.findSort === 'chgdn' ? a.s.chg - b.s.chg : b.s.chg - a.s.chg);
+    const sortBtn = (k, t) => '<button data-findsort="' + k + '" aria-pressed="' + (S.findSort === k) + '">' + t + '</button>';
+    const tool = '<div class="fhd"><label class="search wide">' + ico('search') +
+      '<input id="findIn" type="search" value="' + esc(S.find) + '" placeholder="Search stock, company or sector" aria-label="Search stocks" autocomplete="off" spellcheck="false">' +
+      (S.find ? '<button class="clr" data-act="findclr" aria-label="Clear search">' + ico('x') + '</button>' : '') + '</label>' +
+      '<div class="frow2"><span class="seg" role="group" aria-label="Sort">' + sortBtn('chg', 'Gainers') + sortBtn('chgdn', 'Losers') + sortBtn('az', 'A–Z') + '</span>' +
+      '<span class="hint">' + rows.length + ' of ' + hq.length + '</span></div></div>';
+    const chip = (n, qq) => {
+      const si = secInfo.get(n), pk = pickB.includes(n) ? 'Buy pick' : pickS.includes(n) ? 'Sell pick' : '';
+      if (!si) return '<span class="chip no" title="Not in any sector index on the heatmap">' + hiMatch(n, qq) + '</span>';
+      return '<button class="chip' + (pk ? ' top' : '') + '" data-sector="' + esc(n) + '" title="' + esc(n) + (si ? ' · ' + fmtPct(si.avg) + ' · rank ' + si.rank + ' of ' + secs.length : '') + (pk ? ' · ' + pk : '') + ' · tap for its heatmap">' +
+        hiMatch(shortName(n), qq) + (si ? ' <span class="num ' + cls(si.avg) + '">' + fmtPct(si.avg) + '</span> <span class="rk">#' + si.rank + '</span>' : '') + '</button>';
+    };
+    const body = rows.length ? '<div class="flist">' + rows.slice(0, 250).map(({ s, meta, sl }) => {
+      const p = pass.get(s.symbol);
+      return '<div class="frow" data-sym="' + esc(s.symbol) + '" title="Open ' + esc(s.symbol) + ' chart">' +
+        '<div class="who"><b>' + hiMatch(s.symbol, words[0]) + foTag(s) + (p ? '<span class="chip ' + (p === 'B' ? 'ok' : 'bad') + '" style="padding:1px 7px;font-size:10.5px">' + (p === 'B' ? 'BUY' : 'SELL') + '</span>' : '') + '</b>' +
+        '<small>' + hiMatch(meta.name || s.sector, words[0]) + (meta.industry && meta.name ? ' · ' + esc(meta.industry) : '') + '</small></div>' +
+        '<div class="secs">' + (sl.length ? sl.map(n => chip(n, words[0])).join('') : '<span class="chip no">no sector index</span>') + '</div>' +
+        '<div class="px"><b>' + fmtPx(s.ltp) + '</b><span class="' + cls(s.chg) + '">' + fmtPct(s.chg) + '</span></div></div>';
+    }).join('') + '</div>' : '<div class="flist"><div class="empty">' + ico('inbox') + '<b>No stock matches “' + esc(S.find) + '”</b><p>Try an NSE symbol, company name or sector, like RELIANCE, Infosys or PSU bank.</p></div></div>';
+    return '<aside class="findside seclist' + (q ? '' : ' idle') + '" aria-label="Stock search">' + tool + body +
+      '<p class="hint fnote">Chips: the stock’s sectors with their change and rank of ' + secs.length + '. Outlined = picked sector. Tap a chip to open it here, a row for the chart.</p></aside>';
+  }
+
   // ---------- 20 EMA setup ----------
-  const istMin = iso => Math.floor((Date.parse(iso) / 60000 + 330) % 1440);
+  const istMin =iso => Math.floor((Date.parse(iso) / 60000 + 330) % 1440);
   const hm = iso => iso ? fmtClock(istMin(iso)) : '—';
   const hm5 = iso => { const x = istMin(iso); return fmtClock(x - x % 5); };
   const emaLtp = st => { const q = S.qmap.get(st.symbol); return q ? q.ltp : st.ltp; };
@@ -914,13 +1051,37 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     return { trig, watch, stocks: stocks.size };
   }
 
+  // live sector ranks, the same ones the heatmap shows: top N (Settings > Top sectors per side, default 3) gainers for buys, losers for sells
+  function emaSecRanks() {
+    if (!S.quotes.length) return null;
+    const secs = sectorStats(S.quotes, S.cfg, S.secLive), n = S.cfg.topSectors || 3;
+    const mk = side => { const sg = side === 'buy' ? 1 : -1, r = side === 'buy' ? secs : [...secs].reverse();
+      return new Map(r.map((x, i) => [x.name, { name: x.name, rank: i + 1, chg: x.avg, top: i < n && x.avg * sg > 0 }])); };
+    return { buy: mk('buy'), sell: mk('sell'), n };
+  }
+  // the stock's best-ranked sector for this side (a stock can sit in several sector indices)
+  function emaSec(st, side) {
+    const R = S.emaSecR; if (!R) return null;
+    const q = S.qmap.get(st.symbol), names = q && q.sectors && q.sectors.length ? q.sectors : [st.sector];
+    const hits = names.map(n => R[side].get(n)).filter(Boolean).sort((a, b) => a.rank - b.rank);
+    return hits[0] || null;
+  }
+  function secTag(st, side) {
+    const r = emaSec(st, side), R = S.emaSecR, buy = side === 'buy';
+    if (!r) return '<span class="sec">' + esc(st.sector) + '</span>';
+    const word = buy ? 'gainer' : 'loser';
+    const tag = r.top ? '<span class="sectag ' + (buy ? 'ok' : 'bad') + '" title="Sector is a top ' + R.n + ' ' + word + ' right now">✓ Top ' + R.n + ' ' + word + ' #' + r.rank + '</span>'
+      : '<span class="sectag no" title="Sector is not a top ' + R.n + ' ' + word + ' right now">✗ Not top ' + R.n + ' · #' + r.rank + '</span>';
+    return '<span class="sec">' + esc(r.name) + ' <span class="num ' + cls(r.chg) + '">' + fmtPct(r.chg) + '</span>' + tag + '</span>';
+  }
+
   function emaCard(o) {
     const st = o.st, x = o.x, q = S.qmap.get(st.symbol), ltp = emaLtp(st), trig = x.status === 'triggered', buy = x.side === 'buy', sg = buy ? 1 : -1;
     const vsEma = st.ema ? (ltp / st.ema - 1) * 100 : null, away = (x.level / ltp - 1) * 100 * sg, since = (ltp / x.level - 1) * 100 * sg;
     const step = (c, n, name, t, txt) => '<span class="step ' + c + '"><i>' + n + '</i><em>' + name + '</em><span class="num">' + t + '</span><span>' + txt + '</span></span>';
     const brk = (S.cfg.emaCloseBreak ? 'Closed ' : 'Broke ') + (buy ? 'above ' : 'below ');
     return '<button class="card ' + x.side + '" data-sym="' + esc(st.symbol) + '">' +
-      '<span class="ch"><span><span class="sym">' + esc(st.symbol) + (o.of > 1 ? '<span class="hitno">Hit ' + o.n + ' of ' + o.of + '</span>' : '') + '</span><span class="sec">' + esc(st.sector) + '</span></span>' +
+      '<span class="ch"><span><span class="sym">' + esc(st.symbol) + (o.of > 1 ? '<span class="hitno">Hit ' + o.n + ' of ' + o.of + '</span>' : '') + '</span>' + secTag(st, x.side) + '</span>' +
       '<span class="px"><span class="ltp">' + fmtPx(ltp) + '</span>' + (q ? '<span class="chg ' + cls(q.chg) + '">' + fmtPct(q.chg) + '</span>' : '') + '</span></span>' +
       '<span class="cb"><span class="steps">' +
       step('ok', '1', 'EMA cross', hm(x.signal.t), 'EMA <span class="num">' + fmtPx(x.signal.ema) + '</span> in body') +
@@ -940,6 +1101,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
       if (S.emaErr && !S.emaLoading) { morph(m, '<div class="empty">' + ico('alert') + '<div class="err">Could not run the 20 EMA scan</div><p>' + esc(S.emaErr) + '</p></div>'); return; }
       morph(m, '<div class="empty"><div class="spin"></div><b>' + esc(S.emaLoading || 'Scanning 5-minute candles…') + '</b></div>'); return;
     }
+    S.emaSecR = emaSecRanks();
     const buy = S.emaSide !== 'sell', side = buy ? 'buy' : 'sell', LB = emaLists('buy'), LS = emaLists('sell'), L = buy ? LB : LS;
     const d = S.ema, trigView = S.emaView !== 'watch', list = trigView ? L.trig : L.watch;
     const pull = buy ? 'bearish' : 'bullish', edge = buy ? 'high' : 'low';
@@ -948,12 +1110,15 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
       '<span class="chip">' + (S.cfg.emaCloseBreak ? 'Close ' + (buy ? 'above' : 'below') + ' ' + pull + ' ' + edge : (buy ? 'High crosses' : 'Low crosses') + ' ' + pull + ' ' + edge) + '</span>' +
       '<span class="chip">' + (S.cfg.emaBearHold ? (buy ? 'Whole bearish candle above EMA' : 'Whole bullish candle below EMA') : (buy ? 'Bearish body above EMA, wick may touch' : 'Bullish body below EMA, wick may touch')) + '</span>' +
       (S.cfg.emaGreen ? '<span class="chip">' + (buy ? 'Green' : 'Red') + ' signal candle</span>' : '') + '</div>';
+    const topSecs = S.emaSecR ? [...S.emaSecR[side].values()].filter(r => r.top) : [];
+    const secLine = S.emaSecR ? '<div class="rules"><span class="pl">Top ' + S.emaSecR.n + ' ' + (buy ? 'gainers' : 'losers') + '</span>' +
+      (topSecs.length ? topSecs.map(r => '<span class="chip ' + (buy ? 'ok' : 'bad') + '">' + esc(r.name) + ' ' + fmtPct(r.chg) + '</span>').join('') : '<span class="chip no">none</span>') + '</div>' : '';
     const banner = '<section class="summary live"><div class="st"><span class="sti">' + ico('pulse') + '</span><div><b>' + (buy ? 'Buy' : 'Sell') + ' setups · 20 EMA · 5-min' + dayTag + '</b><p>' +
       (d.lastCandle ? 'Last closed candle ' + hm(d.lastCandle) + (d.past ? ' · session closed' : ' · rescans every few seconds') : 'No closed 5-minute candle yet') +
       (d.source ? ' · data: ' + (d.source === 'fyers' ? 'Fyers (exact NSE candles)' : 'Yahoo' + (d.fyersNote ? ' — ' + esc(d.fyersNote) : '')) : '') +
       (d.error ? ' · <span class="err">' + esc(d.error) + ' (showing the last good data)</span>' : '') +
       (d.oldServer ? '<br><span class="err">The data server is an older version that finds buy setups only. Stop it (Ctrl+C) and start server.py again to get sell setups.</span>' : '') +
-      '</p></div></div><div class="sp">' + rules + '</div></section>';
+      '</p></div></div><div class="sp">' + rules + secLine + '</div></section>';
     const sides = '<div class="seg lg" role="group" aria-label="Side"><button class="buy" data-emaside="buy" aria-pressed="' + buy + '">Buy <span class="cnt">' + LB.trig.length + '</span></button>' +
       '<button class="sell" data-emaside="sell" aria-pressed="' + !buy + '">Sell <span class="cnt">' + LS.trig.length + '</span></button></div>';
     const stages = '<div class="seg" role="group" aria-label="Setup stage"><button data-emaview="trig" aria-pressed="' + trigView + '">Triggered <span class="cnt">' + L.trig.length + '</span></button>' +
@@ -1165,7 +1330,8 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     tag.textContent = isDemo() ? 'DEMO' : 'LIVE' + (src ? ' · ' + src : '');
     tag.title = S.fyersNote ? 'Using Yahoo: ' + S.fyersNote : src ? 'Data from ' + S.source : '';
     fy.hidden = isDemo() || !S.fyersLogin; if (S.fyersLogin) fy.href = S.fyersLogin;
-    const st = $('#status'); st.className = 'pill ' + (S.locked ? 'lock' : 'wait'); morph(st, ico(S.locked ? 'lock' : 'clock') + '<span>' + (S.locked ? 'Locked ' : 'Scan at ') + esc(S.cfg.scanTime) + '</span>');
+    const st = $('#status'); st.className = 'pill tpick ' + (S.locked ? 'lock' : 'wait');
+    morph(st, ico(S.locked ? 'lock' : 'clock') + '<span>' + (S.locked ? 'Locked' : 'Scan at') + '</span><input type="time" id="scanTimeIn" data-k="scanTime" list="scanTimes" min="09:16" max="15:29" step="60" required aria-label="Scan time (IST)" value="' + esc(S.cfg.scanTime) + '">');
     const box = $('#dateBox'), din = $('#dateIn'), dates = S.sessions ? S.sessions.dates : [];
     box.hidden = isDemo();
     if (document.activeElement !== din) din.value = S.date || (S.sessions && S.sessions.default) || S.session || '';
@@ -1178,6 +1344,11 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     const sc = S.scan, sb = $('#shortCount'); sb.textContent = sc ? sc.buy.passed.length + sc.sell.passed.length : ''; sb.hidden = !sc;
     const eb = $('#emaCount'); eb.textContent = S.ema ? emaLists('buy').trig.length + emaLists('sell').trig.length : ''; eb.hidden = !S.ema;
     if (S.tab === 'set') { renderSettings(); return; }
+    if (S.tab === 'scan') {                 // Intraday Scanner tab: self-contained, see intraday/ui/scanner.js
+      if (window.IntradayScanner) window.IntradayScanner.render($('#main'));
+      else morph($('#main'), '<div class="empty"><b>The Strategy-PD-H/L tab needs the data server.</b><p>Start python server.py and open http://localhost:8787/.</p></div>');
+      return;
+    }
     ({ heat: renderHeat, short: renderShort, ema: renderEma, chart: renderChart })[S.tab]();
   }
 
@@ -1196,6 +1367,7 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     const side = e.target.closest('[data-side]'); if (side) { S.side = side.dataset.side; render(); return; }
     const ev = e.target.closest('[data-emaview]'); if (ev) { S.emaView = ev.dataset.emaview; render(); return; }
     const es = e.target.closest('[data-emaside]'); if (es) { S.emaSide = es.dataset.emaside; render(); return; }
+    const fs = e.target.closest('[data-findsort]'); if (fs) { S.findSort = fs.dataset.findsort; render(); return; }
     const sec = e.target.closest('[data-sector]');
     if (sec) { S.sector = sec.dataset.sector; if (S.tab !== 'heat') setTab('heat'); else render(); return; }
     const sym = e.target.closest('[data-sym]');
@@ -1204,9 +1376,11 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     const a = act.dataset.act;
     if (a === 'allsec') { S.sector = null; render(); }
     else if (a === 'latest') setDate(null);
+    else if (a === 'findclr') { S.find = ''; render(); const fi = $('#findIn'); if (fi) { fi.value = ''; fi.focus(); } }
     else if (a === 'prev' || a === 'next') { const syms = S.quotes.map(q => q.symbol).sort(), i = syms.indexOf(S.sym), n = syms.length; if (n) { S.sym = syms[(i + (a === 'next' ? 1 : -1) + n) % n]; $('#symIn').value = S.sym; render(); } }
     else if (a === 'reset') { S.cfg = defaults(); saveCfg(); restartLoops(); }
   });
+  document.addEventListener('input', e => { if (e.target.id === 'findIn') { S.find = e.target.value; render(); } });
   document.addEventListener('toggle', e => { if (e.target.id === 'nearD') S.nearOpen = e.target.open; }, true);
   document.addEventListener('change', e => {
     const t = e.target;
@@ -1225,6 +1399,11 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
     const k = t.dataset.k; if (!k) return;
     let v = t.type === 'checkbox' ? t.checked : t.type === 'number' ? parseFloat(t.value) : t.value;
     if (t.type === 'number' && !isFinite(v)) return;
+    if (k === 'scanTime') {                 // header or Settings: keep it inside market hours, after the first candle
+      const m = v ? parseTime(v) : NaN;
+      if (!isFinite(m) || m <= OPEN_MIN || m >= OPEN_MIN + SESSION_MIN) { t.value = S.cfg.scanTime; return; }
+      if (v === S.cfg.scanTime) return;
+    }
     S.cfg[k] = v; saveCfg(); applyCfgChange([k]);
   });
 
@@ -1257,5 +1436,6 @@ if (typeof module !== 'undefined') module.exports = { UNIVERSE_RAW, DEFAULT_CFG,
 })();
 
 </script>
+<script src="/intraday/ui/scanner.js"></script>
 </body>
 </html>

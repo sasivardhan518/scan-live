@@ -624,7 +624,9 @@ class Store:
         # index symbols come from the provider itself when it has them (Fyers), else from Yahoo
         self.tkey = getattr(prov, "index_key", "yahoo")
         self.own_idx = self.tkey != "yahoo"
-        self.index_tickers = [sec[self.tkey] for sec in self.sectors if sec.get(self.tkey)] if prov.name != "mock" else []
+        # the Nifty 50 benchmark travels with the sector indices (marked "bench": the page shows it above the heatmap, not as a sector)
+        self.bench = {"name": "NIFTY 50", "yahoo": "^NSEI", "fyers": "NSE:NIFTY50-INDEX", "members": [], "constituents": 0, "bench": True}
+        self.index_tickers = [sec[self.tkey] for sec in self.sectors + [self.bench] if sec.get(self.tkey)] if prov.name != "mock" else []
         self.idx, self.idx_err = {}, None
         self.caps = {}                                             # quotes read right at a scan time: {cutoff iso: {"q", "iq"}}
         self.at_lock, self.refresh_lock = threading.Lock(), threading.Lock()
@@ -639,6 +641,17 @@ class Store:
         self.c5l, self.c5_err, self.c5_lock = None, None, threading.Lock()   # c5l = (fetched epoch, market time, {symbol: rows})
         self.c5days, self.c5day_lock = {}, threading.Lock()
         self.ticks = {}                                            # broker: forming 5-minute candle built from live quotes
+        self.fno = None                                            # {symbol: lot size} of NSE stock F&O, None until loaded
+
+    def load_fno(self):
+        """NSE's F&O list (shared with the Strategy tab, cached daily in intraday/lot_sizes.json), for the F&O tag on heatmap tiles."""
+        try:
+            from intraday import feeds, web as intraday_web
+            lots, note = feeds.load_lot_sizes(intraday_web.load_config())
+            self.fno = lots or None
+            print(f"[f&o] {note}", flush=True)
+        except Exception as e:
+            print(f"[f&o] list not loaded: {e!r}", flush=True)
 
     def refresh(self, force=False, wait=False):
         """Pull new data. A refresh already under way is not duplicated (wait=True waits for it and then refreshes)."""
@@ -702,10 +715,14 @@ class Store:
         live = {index symbol: quote} uses quoted index values instead of candles."""
         out = []
         idx = self.idx if idx is None else idx
-        for sec in self.sectors:
+        for sec in self.sectors + [self.bench]:
             tk = sec.get(self.tkey)
+            if sec.get("bench") and not tk:
+                continue
             d = {"name": sec["name"], "members": sec["members"], "constituents": sec["constituents"], "custom": not tk,
                  "value": None, "prevClose": None, "chg": None}
+            if sec.get("bench"):
+                d["bench"] = True
             lq = (live or {}).get(tk)
             if lq is not None:
                 if lq.get("prevClose"):
@@ -741,7 +758,8 @@ class Store:
         m = self.meta[sym]
         return {"symbol": sym, "sector": m["sector"], "weight": m["weight"], "ltp": ltp, "prevClose": prev_close, "open": o, "high": h, "low": l,
                 "prevDay": {"o": pd["o"], "h": pd["h"], "l": pd["l"], "c": pd["c"]}, "first5": first5,
-                "sectors": self.sec_of.get(sym, [])}
+                "sectors": self.sec_of.get(sym, []),
+                "fno": None if self.fno is None else self.fno.get(sym, 0)}    # lot size; 0 = not in F&O; None = list unknown
 
     @staticmethod
     def _first5(rows, step_min=1):
@@ -1119,7 +1137,7 @@ class Store:
 # --------------------------------------------------------------------------
 # HTTP
 # --------------------------------------------------------------------------
-def make_handler(store, app_path, backup=None):
+def make_handler(store, app_path, backup=None, scanner=None):
     """store answers every request. With a backup (--provider auto: store = Fyers, backup = Yahoo) each data request goes
     to Fyers when it is logged in and loaded, and to Yahoo otherwise, or when Fyers fails (then Fyers rests a minute)."""
     def ready(st):
@@ -1161,6 +1179,15 @@ def make_handler(store, app_path, backup=None):
             self.end_headers()
             self.wfile.write(data)
 
+        def do_POST(self):
+            u = urlparse(self.path)
+            if not u.path.startswith("/scanner/"):
+                return self._send(404, {"error": "not found"})
+            from intraday import web as intraday_web          # Intraday Scanner (self-contained, see intraday/)
+            n = int(self.headers.get("Content-Length") or 0)
+            code, body = intraday_web.handle_post(scanner, u.path, self.rfile.read(n) if n else b"")
+            return self._send(code, body)
+
         def do_OPTIONS(self):
             self._send(204, b"")
 
@@ -1176,6 +1203,9 @@ def make_handler(store, app_path, backup=None):
                     if backup is None:
                         return self._send(200, store.health())
                     return self._send(200, {"active": order()[0].prov.name, store.prov.name: store.health(), backup.prov.name: backup.health()})
+                if u.path.startswith(("/scanner/", "/intraday/")):     # Intraday Scanner (self-contained, see intraday/)
+                    from intraday import web as intraday_web
+                    return self._send(*intraday_web.handle_get(scanner, u.path, q))
                 if u.path.startswith("/fyers/"):
                     return self._fyers(u.path, q)
                 stores = order()
@@ -1210,6 +1240,8 @@ def make_handler(store, app_path, backup=None):
                     return (404, {"error": "that date is in the future"})
             if path == "/sessions":
                 return (200, store.sessions())
+            if path == "/universe":                         # company names for the heatmap search panel
+                return (200, [{"symbol": x["symbol"], "name": x.get("name") or "", "industry": x.get("industry") or ""} for x in store.u])
             if path == "/snapshot":
                 at = q.get("at")
                 if at and not (len(at) >= 4 and ":" in at):
@@ -1277,6 +1309,10 @@ def main():
     ap.add_argument("--mock-speed", type=float, default=1.0, help="mock provider: clock speed (60 = one minute per second)")
     ap.add_argument("--no-live-list", action="store_true", help="skip downloading the current Nifty 200 list from NSE at start")
     ap.add_argument("--app", default=os.path.join(HERE, "index.html"))
+    ap.add_argument("--scanner", default="yahoo", help="Intraday Scanner tab data: yahoo (live) | off | replay-mock | "
+                                                       "replay-yahoo:YYYY-MM-DD | replay-csv:PATH")
+    ap.add_argument("--scanner-speed", type=float, default=30, help="replay speed (30 = one 5-minute candle every 10 s)")
+    ap.add_argument("--scanner-from", default="09:15", help="replay start time")
     a = ap.parse_args()
 
     uni = load_universe()
@@ -1302,6 +1338,7 @@ def main():
     sectors, failed = load_sectors(uni, offline=a.provider == "mock" or a.no_live_list)
     print(f"[sectors] {len(sectors)} sectors" + (f"; stock lists from cache for {failed}" if failed else ""), flush=True)
     store = Store(prov, uni, a.refresh, sectors)
+    threading.Thread(target=store.load_fno, daemon=True).start()
     backup = Store(backup_prov, uni, a.refresh, sectors) if backup_prov else None
     if backup:
         print(f"[auto] Fyers when logged in, Yahoo until then (or if Fyers fails)", flush=True)
@@ -1317,6 +1354,10 @@ def main():
                 st._told = True
                 print(f"[fyers] ready: daily {len(st.daily)}, error {st.err}", flush=True)
 
+    scanner = None
+    if a.scanner != "off":                       # Intraday Scanner: its own Yahoo feed, built in the background
+        from intraday import web as intraday_web
+        scanner = intraday_web.start(a.scanner, uni, a.scanner_speed, a.scanner_from)
     for st in [store] + ([backup] if backup else []):
         name = st.prov.name
         background = name == "fyers"            # about a minute of downloads at Fyers' rate limit: serve the app (and its login) meanwhile
@@ -1334,7 +1375,7 @@ def main():
     # Windows lets a second server bind the same port and the old one keeps answering, so refuse to start instead
     ThreadingHTTPServer.allow_reuse_address = os.name != "nt"
     try:
-        srv = ThreadingHTTPServer((a.host, a.port), make_handler(store, a.app, backup))
+        srv = ThreadingHTTPServer((a.host, a.port), make_handler(store, a.app, backup, scanner))
     except OSError as e:
         raise SystemExit(f"Port {a.port} is already in use ({e}). Another copy of server.py is probably still running: "
                          f"stop it (Task Manager, or: Get-NetTCPConnection -LocalPort {a.port} -State Listen | "
